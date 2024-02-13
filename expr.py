@@ -74,7 +74,7 @@ def plot_carbon_footprint_in_literature():
         ["10.1109/VLSITechnologyandCir46769.2022.9830438",  2022, "DIMC", 12, 8, 30.3,  0.336,       41.6/4,         None, None, None],
         ["10.1109/ISSCC42614.2022.9731545",                 2022, "DIMC", 28, 8, 27.38, 0.0055,      0.0055/0.03,    None, None, None],
         ["10.1109/ISSCC42614.2022.9731659",                 2022, "DIMC", 28, 8, 1108/64,9.175/64, 9.175/64/0.033,   None, None, None],
-        ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 238,   0.182,       0.364,          None, None, None],  # Weijie's design
+        ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 23.8,  0.182,       0.364,          None, None, None],  # Weijie's design
         ["10.1109/ISSCC42613.2021.9365788",                 2021, "AIMC", 16, 8, 30.25, 2.95,        0.118,          None, None, None],
         ["10.1109/ESSCIRC59616.2023.10268725",              2023, "DIMC", 28, 8, 22.4,  1.46*0.0159, 1.46,           None, None, None],
         ["10.1109/ISSCC42615.2023.10067360",                2023, "DIMC", 28, 8, 2.52,  3.33,        0.85,           None, None, None],
@@ -118,12 +118,14 @@ def plot_carbon_footprint_in_literature():
             cur_year = [years[y] for j in range(len(res))]
             topsw_cur.scatter(cur_year, res[:, 5].astype(float), marker=markers[i],
                               color=colors[i], edgecolors="black", s=markersize[i])
+            topsw_cur.set_yscale("log")
             for x, y, tech in zip(cur_year, res[:, 5].astype(float).tolist(), res[:, 3].astype(int).tolist()):
                 topsw_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
 
             # plot tops
             tops_cur.scatter(cur_year, res[:, 6].astype(float), marker=markers[i],
                               color=colors[i], edgecolors="black", s=markersize[i])
+            tops_cur.set_yscale("log")
 
             for x, y, tech in zip(cur_year, res[:, 6].astype(float).tolist(), res[:, 3].astype(int).tolist()):
                 tops_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
@@ -131,6 +133,7 @@ def plot_carbon_footprint_in_literature():
             # plot topsmm2
             topsmm2_cur.scatter(cur_year, res[:, 7].astype(float), marker=markers[i],
                              color=colors[i], edgecolors="black", s=markersize[i])
+            topsmm2_cur.set_yscale("log")
             for x, y, tech in zip(cur_year, res[:, 7].astype(float).tolist(), res[:, 3].astype(int).tolist()):
                 topsmm2_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
 
@@ -174,12 +177,14 @@ def plot_carbon_footprint_in_literature():
             cf_fws = np.array(cf_fws)
             cf_ft_cur.scatter(cur_year, cf_fts, marker=markers[i],
                              color=colors[i], edgecolors="black", s=markersize[i])
+            cf_ft_cur.set_yscale("log")
             for x, y, tech in zip(cur_year, cf_fts, res[:, 3].astype(int).tolist()):
                 cf_ft_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
 
             # plot cf (fixed-work)
             cf_fw_cur.scatter(cur_year, cf_fws, marker=markers[i],
                               color=colors[i], edgecolors="black", s=markersize[i])
+            cf_fw_cur.set_yscale("log")
             for x, y, tech in zip(cur_year, cf_fws, res[:, 3].astype(int).tolist()):
                 cf_fw_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
 
