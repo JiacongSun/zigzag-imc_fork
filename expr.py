@@ -17,6 +17,78 @@ from zigzag.classes.hardware.architecture.get_cacti_cost import get_w_cost_per_w
 from zigzag.classes.hardware.architecture.get_cacti_cost import get_cacti_cost
 import random
 
+def generate_array_square_shape(previous, this, points=10):
+    # function does not work
+    assert this > previous, "ending angle must be larger than starting angle"
+    regions = [1/8, 3/8, 5/8, 7/8]
+    prev_idx = 0
+    this_idx = 0
+    for i in range(len(regions)):
+        if previous >= 2 * np.pi * regions[i]:
+            prev_idx = i
+        if this >= 2 * np.pi * regions[i]:
+            this_idx = i
+    # generate starting points
+    angles = np.linspace(previous, this, 10).tolist()
+    x_angles = []
+    y_angles = []
+    for ele in angles:
+        if ele <= regions[0]:
+            pt = 0  # points to be aded
+            x_angles.append(pt)
+            y_angles.append(ele)
+        elif regions[0] < ele <= regions[1]:
+            x_angles.append(0)
+            y_angles.append(0.5*np.pi)
+            x_angles.append(ele)
+            y_angles.append(0.5*np.pi)
+        elif regions[1] < ele <= regions[2]:
+            x_angles.append(np.pi)
+            y_angles.append(0.5 * np.pi)
+            x_angles.append(np.pi)
+            y_angles.append(ele)
+        else:
+            x_angles.append(0)
+            y_angles.append(1.5 * np.pi)
+            x_angles.append(ele)
+            y_angles.append(1.5 * np.pi)
+    x = [0] + np.cos(x_angles).tolist() + [0]
+    y = [0] + np.sin(y_angles).tolist() + [0]
+    return x, y
+
+def drawPieMarker(xs, ys, ratios, sizes, colors, ax=None):
+    # This function is to plot scatter pie chart.
+    # The source is: https://stackoverflow.com/questions/56337732/how-to-plot-scatter-pie-chart-using-matplotlib
+    # @para xs: position of x axis (list or array)
+    # @para ys: position of y axis (list or array)
+    # @para ratios: pie ratio (list)
+    # @para sizes: pie size of each pie (list)
+    # @para colors: color of each section
+    # @para ax: plot handle
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 8))
+
+    assert sum(ratios) <= 1, 'sum of ratios needs to be < 1'
+
+    markers = []
+    previous = 0
+    # calculate the points of the pie pieces
+    # generate all points shaping the pie pieces
+    for color, ratio in zip(colors, ratios):
+        this = 2 * np.pi * ratio + previous
+        # circle shape
+        x = [0] + np.cos(np.linspace(previous, this, 10)).tolist() + [0]
+        y = [0] + np.sin(np.linspace(previous, this, 10)).tolist() + [0]
+        # square shape
+        # x, y = generate_array_square_shape(previous, this, 10)
+        xy = np.column_stack([x, y])
+        previous = this
+        markers.append({'marker':xy, 's':np.abs(xy).max()**2*np.array(sizes), 'facecolor':color, 'edgecolor': 'white'})
+
+    # scatter each of the pie pieces to create pies
+    for marker in markers:
+        ax.scatter(xs, ys, **marker)
+
 def plot_m_factor_across_techs():
     # This function is to interpolate m factor for different technology nodes, based on data provided by ACT paper.
     # m is in equation: CF/op = k1/topsw + m/(yield*lifetime*topsmm2) + constant
@@ -58,52 +130,45 @@ def plot_m_factor_across_techs():
     plt.tight_layout()
     plt.show()
 
-def plot_carbon_footprint_in_literature():
+def plot_carbon_footprint_in_literature(data, period=4e+6):
+    # This function is to plot carbon footprint in literature in recent years
+    # There are 3 figures:
+    # fig1: topsw vs. topsmm2
+    # fig2: cf (fixed-time) vs. cf (fixed-work)
+    # fig3: cf breakdown (fixed-time) vs. cf breakdown (fixed-work)
+    pass
+
+def plot_carbon_footprint_across_years_in_literature(data, period=4e+3):
     # This function is to plot carbon footprint in literature across different years, for sram-based in-memory computing accelerators.
+    # x axis: years
+    # there are in total 7 subplots
+    # fig1: topsw vs. years
+    # fig2: tops vs. years
+    # fig3: topsmm2 vs. years
+    # fig4: cf (fixed-time) vs. years
+    # fig5: cf (fixed-work) vs. years
+    # fig6: cf breakdown (fixed-time) vs. years
+    # fig7: cf breakdown (fixed-work) vs. years
     # Marker: o: AIMC, square: DIMC.
+    # @para period: the average activation period per task (unit: ns)
     # order:
     # doi, year, IMC type, tech(nm), input precision, topsw (peak-macro), tops (peak-macro), topsmm2 (peak-macro), imc_size
     # all metrics are normalized to 8b precision
-    data = np.array([
-        #           DOI                               Year    IMC  Tech Pres topsw(peak) tops(peak)  topsmm2 (peak)     #ops/cycle (peak)
-        ["10.1109/ISSCC42613.2021.9365766",                 2021, "DIMC", 22, 8, 24.7,  0.917,       0.917/0.202,    64*1024/8/8],
-        ["10.1109/ISSCC42614.2022.9731762",                 2022, "DIMC", 28, 8, 30.8,  1.35,        1.43,           12*8*1024/8/8],
-        ["10.1109/ISSCC42614.2022.9731754",                 2022, "DIMC", 5,  8, 63,    2.95/4,      55,             8*8*1024/8/8],
-        ["10.1109/ISSCC42614.2022.9731645",                 2022, "DIMC", 28, 8, 12.5,  1.48,        0.221,          24*8*1024/8/8],
-        ["10.1109/JSSC.2021.3061508",                       2021, "DIMC", 65, 8, 2.06*4,0.006*4,     0.006*4/0.2272, 2*8*1024/8/8],
-        ["10.1109/VLSITechnologyandCir46769.2022.9830438",  2022, "DIMC", 12, 8, 30.3,  0.336,       41.6/4,         1*8*1024/8/8],
-        ["10.1109/ISSCC42614.2022.9731545",                 2022, "DIMC", 28, 8, 27.38, 0.0055,      0.0055/0.03,    4*8*1024/8/8],
-        ["10.1109/ISSCC42614.2022.9731659",                 2022, "DIMC", 28, 8, 1108/64,9.175/64, 9.175/64/0.033,   2*8*1024/8/8],
-        ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 23.8,  0.182,       0.364,          128*8*1024/8/8],  # Weijie's design
-        ["10.1109/ISSCC42613.2021.9365788",                 2021, "AIMC", 16, 8, 30.25, 2.95,        0.118,          589*8*1024/8/8],
-        ["10.1109/ESSCIRC59616.2023.10268725",              2023, "DIMC", 28, 8, 22.4,  1.46*0.0159, 1.46,           2*8*1024/8/8],
-        ["10.1109/ISSCC42615.2023.10067360",                2023, "DIMC", 28, 8, 2.52,  3.33,        0.85,           144*8*1024/8/8],
-        ["10.1109/ISSCC19947.2020.9062985",                 2020, "AIMC", 7,  8, 321/4, 0.455/4,     0.455/4/0.0032, 0.5*8*1024/8/8],
-        ["10.1109/CICC51472.2021.9431575",                  2021, "AIMC", 22, 8, 1050/16,23.5/16,    12.1/16,        64*8*1024/8/8],
-        ["10.1109/CICC57935.2023.10121308",                 2023, "DIMC", 28, 8, 711/2/8,1.152/16,   1.152/16/(0.636*0.148), 1.152*8*1024/8/8],
-        ["10.1109/CICC57935.2023.10121243",                 2023, "AIMC", 65, 8, 1.4,   1.104/64,    1.104/64/7,     16*8*1024/8/8],
-        ["10.1109/CICC57935.2023.10121221",                 2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318, 1.25,        32*8*1024/8/8],
-        ["10.1109/CICC57935.2023.10121213",                 2023, "AIMC", 65, 8, 95.4*(9/64), 0.8136*(9/64), 0.8136*(9/64)/0.26, 13.5*8*1024/8/8],
-        ["10.1109/JSSC.2020.3005754",                       2020, "AIMC", 55, 8, 0.6,   0.00514,     0.00514/(2.34*2.54), 0.5*8*1024/8/8],
-        ["10.23919/VLSICircuits52068.2021.9492444",         2021, "AIMC", 28, 8, 5796/64, 6.144/64,  6.144/64/0.51,  36.8*8*1024/8/8],
-        ["https://ieeexplore.ieee.org/abstract/document/9508673", 2021, "DIMC", 28, 8, 588/64, 4.9/64, 4.9/64/20.9,  432*8*1024/8/8],
-        ["10.1109/ISSCC42614.2022.9731657",                 2022, "AIMC", 28, 8, 45.7/2*3/8, 0.97/2*3/8, 0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8],
-        ["10.1109/TCSI.2023.3244338",                       2023, "AIMC", 28, 8, 16.1/4,   0.0128/4,  0.0128/4/(0.22*0.26), 2*8*1024/8/8],
-        ["10.1109/TCSI.2023.3241385",                       2023, "AIMC", 28, 8, 942.9/4/8, 59.584/4/8*0.0385, 59.584/4/8, 2*8*1024/8/8],
-    ])
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
     markers = ["o", "^"]
     font_size = 15
 
     fig_rows_nbs = 2
-    fig_cols_nbs = 3
+    fig_cols_nbs = 4
     fig, axs = plt.subplots(nrows=fig_rows_nbs, ncols=fig_cols_nbs, figsize=(10, 8))
     topsw_cur = axs[0, 0]
     tops_cur = axs[0, 1]
     topsmm2_cur = axs[0, 2]
     cf_ft_cur = axs[1, 0]  # CF/op (fixed-time)
     cf_fw_cur = axs[1, 1]  # CF/op (fixed-work)
+    pie_cf_ft_cur = axs[1, 2]  # CF/op pie (fixed-time)
+    pie_cf_fw_cur = axs[1, 3]  # CF/op pie (fixed-time)
 
     # filter out points on 55, 65nm, since carbon cost cannot be calculated on these techs, due to data limitation
     new_data = []
@@ -177,9 +242,11 @@ def plot_carbon_footprint_in_literature():
             # calc cf (fixed-time)
             cf_fts = []
             cf_fws = []
+            pie_cf_fts = []
+            pie_cf_fws = []
             chip_yield = 0.95  # yield
             lifetime = 3  # year
-            period = 4e+6  # 4us
+            # period = 4e+6  # 4us
             k1 = 301/(3.6E+18)  # g, CO2/pJ
             for idx in range(len(topsws)):
                 topsw = topsws[idx]
@@ -191,11 +258,13 @@ def plot_carbon_footprint_in_literature():
                 k2 = m/chip_yield/lifetime / (365*24*60*60E+12)  # g, CO2/mm2/ps
                 parallel = paralls[idx]
                 embodied_carbon_ft = k2/topsmm2
-                embodied_carbon_fw = k2 * period * tops/topsmm2 / parallel
+                embodied_carbon_fw = k2 * (period * 1000) * tops/topsmm2 / parallel  # period: unit: ns -> ps
                 cf_ft = operational_carbon + embodied_carbon_ft
                 cf_fw = operational_carbon + embodied_carbon_fw
                 cf_fts.append(cf_ft)
                 cf_fws.append(cf_fw)
+                pie_cf_fts.append([operational_carbon/cf_ft, 1-operational_carbon/cf_ft])
+                pie_cf_fws.append([operational_carbon/cf_fw, 1-operational_carbon/cf_fw])
             cf_fts = np.array(cf_fts)
             cf_fws = np.array(cf_fws)
             cf_ft_cur.scatter(cur_year, cf_fts, marker=markers[i],
@@ -211,6 +280,31 @@ def plot_carbon_footprint_in_literature():
             for x, y, tech in zip(cur_year, cf_fws, res[:, 3].astype(int).tolist()):
                 cf_fw_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
 
+            # plot pie cf (fixed-time)
+            pie_size = 200
+            pie_colors = ["green", "red"]
+            for x, y, ratio in zip(cur_year, cf_fts, pie_cf_fts):
+                drawPieMarker(xs=[x],
+                              ys=[y],
+                              ratios=ratio,
+                              sizes=[pie_size],
+                              colors=pie_colors,
+                              ax=pie_cf_ft_cur)
+            pie_cf_ft_cur.set_yscale("log")
+
+            # plot pie cf (fixed-work)
+            pie_size = 200
+            # pie_colors = [colors[1], colors[2]]
+            for x, y, ratio in zip(cur_year, cf_fws, pie_cf_fws):
+                drawPieMarker(xs=[x],
+                              ys=[y],
+                              ratios=ratio,
+                              sizes=[pie_size],
+                              colors=pie_colors,
+                              ax=pie_cf_fw_cur)
+            pie_cf_fw_cur.set_yscale("log")
+
+
     # configuration
     for i in range(0, fig_rows_nbs):
         for j in range(0, fig_cols_nbs):
@@ -221,6 +315,8 @@ def plot_carbon_footprint_in_literature():
     topsmm2_cur.set_ylabel(f"TOP/s/mm$^2$ (peak)", fontsize=font_size)
     cf_ft_cur.set_ylabel(f"g, CO$_2$/op (fixed-time)", fontsize=font_size)
     cf_fw_cur.set_ylabel(f"g, CO$_2$/op (fixed-work)", fontsize=font_size)
+    pie_cf_ft_cur.set_ylabel(f"g, CO$_2$/op (fixed-time)", fontsize=font_size)
+    pie_cf_fw_cur.set_ylabel(f"g, CO$_2$/op (fixed-work)", fontsize=font_size)
 
     plt.tight_layout()
     plt.show()
@@ -991,7 +1087,7 @@ def get_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
     return tech_param_28nm, hd_param, dimensions
 
 
-def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6):
+def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6):  # 4 ms by default
     #######################################################
     # This function is to calculate g, CO2 per operation for two scenarios: fixed-time and fixed-work.
     # Fixed-time scenario: assuming the design is fully activated during the entire lifetime.
@@ -1119,6 +1215,7 @@ if __name__ == "__main__":
     # variables: cols_nbs => [32, 64, .., 1024]
     # variables: rows_nbs => rows_nbs = cols_nbs
     # variables:
+    periods = {"peak": 3.4e+9, "ae": 10e+9, "ds_cnn": 1e+9, "mobilenet": 1.3e+9, "resnet8": 1.3e+9}  # unit: ns
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["ae", "ds_cnn", "mobilenet", "resnet8", "peak"]  # peak: macro-level peak  # options of workloads
     imc_types = ["AIMC", "DIMC"]
@@ -1149,7 +1246,7 @@ if __name__ == "__main__":
                                 "input_precision"] * 2
                             cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
                                 energy=peak_en_total, lat=tclk_total, area=area_total,
-                                nb_of_ops=nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6)  # unit: g, CO2/MAC
+                                nb_of_ops=nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=periods["peak"])  # unit: g, CO2/MAC
 
                             res = {
                                 "workload": workload,
@@ -1227,7 +1324,7 @@ if __name__ == "__main__":
                             # below is for g, CO2/inference
                             cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
                                 energy=en_total, lat=lat_total * tclk_total, area=area_total,
-                                nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6)
+                                nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload])
                             res = {
                                 "workload": workload,
                                 "imc_type": imc_type,
@@ -1303,8 +1400,8 @@ if __name__ == "__main__":
                             "t_en": dff.t_en.to_list()[0],
                             "t_cf_ft": dff.t_cf_ft.to_list()[0],
                             "t_cf_fw": dff.t_cf_fw.to_list()[0],
-                            "t_cf_ft_ex_pkg": dff.t_cf_ft_ex_pkg.to_list()[0],
-                            "t_cf_fw_ex_pkg": dff.t_cf_fw_ex_pkg.to_list()[0],
+                            "t_cf_ft_ex_pkg": dff.t_cf_ft_ex_pkg.to_list()[0],  # exclude package cost
+                            "t_cf_fw_ex_pkg": dff.t_cf_fw_ex_pkg.to_list()[0],  # exclude package cost
                             "topsw": 1 / (dff.t_en.to_list()[0] / dff.ops.to_list()[0]),  # 1/(pJ/op)
                             "tops": dff.ops.to_list()[0] / (dff.t_lat.to_list()[0] * dff.t_tclk.to_list()[0] * 1000),
                             # ops/ps
@@ -1364,7 +1461,7 @@ if __name__ == "__main__":
             pickle.dump(df, fp)
         print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
     else:
-        # load df from pickle
+        ## load df from pickle
         # with open("expr_res.pkl", "rb") as fp:
         #     df = pickle.load(fp)
         # workloads.append("geo")  # append geo so that plotting for geo is also supported
@@ -1389,7 +1486,7 @@ if __name__ == "__main__":
         #######################
         ## Experiment: sweeping sram size, fixing imc size
         ## plot_bar_on_varied_sram below is for plotting cost breakdown vs. different sram size, under a fixed imc size and workload
-        # workload = "mobilenet"
+        # workload = "ae"
         # imc_dim = 128
         # assert imc_dim in Dimensions, f"Legal dimensions: {Dimensions}"
         # assert workload in workloads, f"Legal workload: {workloads}"
@@ -1405,4 +1502,43 @@ if __name__ == "__main__":
         ## Plot m trend
         # plot_m_factor_across_techs()
         ## Plot carbon cost in literature
-        plot_carbon_footprint_in_literature()
+        data = np.array([
+            #           DOI                               Year    IMC  Tech Pres topsw(peak) tops(peak)  topsmm2 (peak)     #ops/cycle (peak)
+            ["10.1109/ISSCC42613.2021.9365766",                 2021, "DIMC", 22, 8, 24.7,  0.917,       0.917/0.202,    64*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731762",                 2022, "DIMC", 28, 8, 30.8,  1.35,        1.43,           12*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731754",                 2022, "DIMC", 5,  8, 63,    2.95/4,      55,             8*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731645",                 2022, "DIMC", 28, 8, 12.5,  1.48,        0.221,          24*8*1024/8/8],
+            ["10.1109/JSSC.2021.3061508",                       2021, "DIMC", 65, 8, 2.06*4,0.006*4,     0.006*4/0.2272, 2*8*1024/8/8],
+            ["10.1109/VLSITechnologyandCir46769.2022.9830438",  2022, "DIMC", 12, 8, 30.3,  0.336,       41.6/4,         1*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731545",                 2022, "DIMC", 28, 8, 27.38, 0.0055,      0.0055/0.03,    4*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731659",                 2022, "DIMC", 28, 8, 1108/64,9.175/64, 9.175/64/0.033,   2*8*1024/8/8],
+            ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 23.8,  0.182,       0.364,          128*8*1024/8/8],  # Weijie's design
+            ["10.1109/ISSCC42613.2021.9365788",                 2021, "AIMC", 16, 8, 30.25, 2.95,        0.118,          589*8*1024/8/8],
+            ["10.1109/ESSCIRC59616.2023.10268725",              2023, "DIMC", 28, 8, 22.4,  1.46*0.0159, 1.46,           2*8*1024/8/8],
+            ["10.1109/ISSCC42615.2023.10067360",                2023, "DIMC", 28, 8, 2.52,  3.33,        0.85,           144*8*1024/8/8],
+            ["10.1109/ISSCC19947.2020.9062985",                 2020, "AIMC", 7,  8, 321/4, 0.455/4,     0.455/4/0.0032, 0.5*8*1024/8/8],
+            ["10.1109/CICC51472.2021.9431575",                  2021, "AIMC", 22, 8, 1050/16,23.5/16,    12.1/16,        64*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121308",                 2023, "DIMC", 28, 8, 711/2/8,1.152/16,   1.152/16/(0.636*0.148), 1.152*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121243",                 2023, "AIMC", 65, 8, 1.4,   1.104/64,    1.104/64/7,     16*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121221",                 2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318, 1.25,        32*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121213",                 2023, "AIMC", 65, 8, 95.4*(9/64), 0.8136*(9/64), 0.8136*(9/64)/0.26, 13.5*8*1024/8/8],
+            ["10.1109/JSSC.2020.3005754",                       2020, "AIMC", 55, 8, 0.6,   0.00514,     0.00514/(2.34*2.54), 0.5*8*1024/8/8],
+            ["10.23919/VLSICircuits52068.2021.9492444",         2021, "AIMC", 28, 8, 5796/64, 6.144/64,  6.144/64/0.51,  36.8*8*1024/8/8],
+            ["https://ieeexplore.ieee.org/abstract/document/9508673", 2021, "DIMC", 28, 8, 588/64, 4.9/64, 4.9/64/20.9,  432*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731657",                 2022, "AIMC", 28, 8, 45.7/2*3/8, 0.97/2*3/8, 0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8],
+            ["10.1109/TCSI.2023.3244338",                       2023, "AIMC", 28, 8, 16.1/4,   0.0128/4,  0.0128/4/(0.22*0.26), 2*8*1024/8/8],
+            ["10.1109/TCSI.2023.3241385",                       2023, "AIMC", 28, 8, 942.9/4/8, 59.584/4/8*0.0385, 59.584/4/8, 2*8*1024/8/8],
+        ])
+        # calc period for tinyml workloads
+
+        # ds-cnn (keyword spotting): 16 kHz (6.25e+4 ns), 1s video
+        # mobilenet (visual weak words): 216 MHz (4.6ns), 1.3s/inference is required in the paper
+        # resnet8 (iamgenet): no latency info in the dataset paper. Set to the same with mobilenet.
+        # autoencoder (anomaly detection): 16 KHz (6.25e+4 ns), 10s video
+        # In summary:
+        # Clock speed requirement:
+        # ds-cnn: 6.25e+4 ns; mobilenet: 4.6ns; resnet8: 4.6ns; autoencoder: 6.25e+4ns; Average: 3.1252e+4 ns
+        # Inference period requirement:
+        # ds-cnn: 1 s; mobilenet: 1.3 s; resnet8: 1.3 s; autoencoder: 10 s; Average: 3.4 s
+        plot_carbon_footprint_across_years_in_literature(data=data, period=3.4e+9)  # unit: ns
+        # plot_carbon_footprint_in_literature(data=data, period=4e+3)  # unit: ns
