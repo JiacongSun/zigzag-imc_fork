@@ -15,6 +15,8 @@ from zigzag.classes.hardware.architecture.memory_hierarchy import MemoryHierarch
 from zigzag.classes.hardware.architecture.memory_instance import MemoryInstance
 from zigzag.classes.hardware.architecture.get_cacti_cost import get_w_cost_per_weight_from_cacti
 from zigzag.classes.hardware.architecture.get_cacti_cost import get_cacti_cost
+from zigzag.classes.hardware.architecture.operational_unit import Multiplier
+from zigzag.classes.hardware.architecture.operational_array import MultiplierArray
 import random
 
 def generate_array_square_shape(previous, this, points=10):
@@ -876,6 +878,165 @@ def plot_bar(i_df, imc_types, workload, sram_size=256*1024):
     plt.tight_layout()
     plt.show()
 
+def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*1024):
+    # This function defines the memory hierarchy in the hardware template.
+    # @para imc_array: imc pe array object
+    # @para visualize: whether illustrate teh memory hierarchy
+    # @para sram_size: define the on-chip sram size, unit: byte
+    """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
+    cacti_path = "zigzag/classes/cacti/cacti_master"
+
+    """Memory hierarchy variables"""
+    """ size=#bit, bw=(read bw, write bw), cost=(read word energy, write work energy) """
+    cell_group = MemoryInstance(
+        name="cell_group",
+        size=8 * 1,
+        r_bw=8,
+        w_bw=8,
+        r_cost=0,
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8, # unit: pJ/weight
+        area=0.614 * 6 / 1e6 * 8, # this area is already included in imc_array
+        r_port=1, # no standalone read port
+        w_port=1, # no standalone write port
+        rw_port=0, # 1 port for both reading and writing
+        latency=0, # no extra clock cycle required
+    )
+    reg_I1 = MemoryInstance(
+        name="rf_I1",
+        size=8,
+        r_bw=8,
+        w_bw=8,
+        r_cost=0,
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8, # pJ/access
+        area=0.614 * 6 / 1e6 * 8, # mm^2
+        r_port=1,
+        w_port=1,
+        rw_port=0,
+        latency=1,
+    )
+
+    reg_O1 = MemoryInstance(
+        name="rf_O1",
+        size=16,
+        r_bw=16,
+        w_bw=16,
+        r_cost=0,
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 16, # pJ/access
+        area=0.614 * 6 / 1e6 * 16, # mm^2
+        r_port=2,
+        w_port=2,
+        rw_port=0,
+        latency=1,
+    )
+
+    ##################################### on-chip memory hierarchy building blocks #####################################
+
+    # sram_size = 256 * 1024 # unit: byte
+    sram_bw = max(imc_array.dimension_sizes[1] * 8 * imc_array.dimension_sizes[2],
+                  imc_array.dimension_sizes[0] * 16 * imc_array.dimension_sizes[2])
+    # The next command can not work for unclear reason
+    # ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, "28", "sram", sram_size, sram_bw, hd_hash=str(hash((sram_size, sram_bw, random.randbytes(8)))))
+    ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, "28", "sram", sram_size, sram_bw)
+
+    sram_256KB_256_3r_3w = MemoryInstance(
+        name="sram_256KB",
+        size=sram_size * 8, # byte -> bit
+        r_bw=sram_bw,
+        w_bw=sram_bw,
+        r_cost=sram_r_cost,
+        w_cost=sram_w_cost,
+        area=sram_area,
+        r_port=3,
+        w_port=3,
+        rw_port=0,
+        latency=1,
+        min_r_granularity=sram_bw//16, # assume there are 16 sub-banks
+        min_w_granularity=sram_bw//16, # assume there are 16 sub-banks
+    )
+
+    #######################################################################################################################
+
+    # dram_size = 1*1024*1024*1024 # unit: byte
+    dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
+    dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
+    dram_bw = imc_array.dimension_sizes[0] * 8 * imc_array.dimension_sizes[2]
+    dram_100MB_32_3r_3w = MemoryInstance(
+        name="dram_1GB",
+        size=dram_size*8, # byte -> bit
+        r_bw=dram_bw,
+        w_bw=dram_bw,
+        r_cost=dram_ac_cost_per_bit*dram_bw, # pJ/access
+        w_cost=dram_ac_cost_per_bit*dram_bw, # pJ/access
+        area=0,
+        r_port=3,
+        w_port=3,
+        rw_port=0,
+        latency=1,
+        min_r_granularity=dram_bw // 16,  # assume there are 16 sub-banks
+        min_w_granularity=dram_bw // 16,  # assume there are 16 sub-banks
+    )
+
+    memory_hierarchy_graph = MemoryHierarchy(operational_array=imc_array)
+
+    """
+    fh: from high = wr_in_by_high 
+    fl: from low = wr_in_by_low 
+    th: to high = rd_out_to_high
+    tl: to low = rd_out_to_low
+    """
+    memory_hierarchy_graph.add_memory(
+        memory_instance=cell_group,
+        operands=("I2",),
+        port_alloc=({"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},),
+        served_dimensions=set(),
+    )
+    memory_hierarchy_graph.add_memory(
+        memory_instance=reg_I1,
+        operands=("I1",),
+        port_alloc=({"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},),
+        served_dimensions={(1, 0, 0)},
+    )
+    memory_hierarchy_graph.add_memory(
+        memory_instance=reg_O1,
+        operands=("O",),
+        port_alloc=(
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_2", "th": "r_port_2"},),
+        served_dimensions={(0, 1, 0)},
+    )
+
+    ##################################### on-chip highest memory hierarchy initialization #####################################
+
+    memory_hierarchy_graph.add_memory(
+        memory_instance=sram_256KB_256_3r_3w,
+        operands=("I1","O",),
+        port_alloc=(
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
+        ),
+        served_dimensions="all",
+    )
+
+    ####################################################################################################################
+
+    memory_hierarchy_graph.add_memory(
+        memory_instance=dram_100MB_32_3r_3w,
+        operands=("I1", "I2", "O"),
+        port_alloc=(
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+        ),
+        served_dimensions="all",
+    )
+
+    if visualize:
+        from zigzag.visualization.graph.memory_hierarchy import (
+            visualize_memory_hierarchy_graph,
+        )
+
+        visualize_memory_hierarchy_graph(memory_hierarchy_graph)
+    return memory_hierarchy_graph
+
 def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
     # This function defines the memory hierarchy in the hardware template.
     # @para imc_array: imc pe array object
@@ -1045,21 +1206,42 @@ def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
 
 
 def get_accelerator(imc_type, tech_param, hd_param, dims, sram_size=256*1024):
-    assert imc_type in ["AIMC", "DIMC"], f"imc_type {imc_type} not in [AIMC, DIMC]"
+    assert imc_type in ["pdigital", "AIMC", "DIMC"], f"imc_type {imc_type} not in [pdigital, AIMC, DIMC]"
+    if imc_type in ["AIMC", "DIMC"]:
+        imc_array = ImcArray(tech_param, hd_param, dims)
+        mem_hier = memory_hierarchy_dut(imc_array, sram_size=sram_size)
+    else:
+        parray, multiplier_energy = digital_array(dims)
+        mem_hier = memory_hierarchy_dut_for_pdigital(parray, sram_size=sram_size)
+        imc_array = parray
 
-    imc_array = ImcArray(tech_param, hd_param, dims)
-    mem_hier = memory_hierarchy_dut(imc_array, sram_size=sram_size)
     core = {Core(1, imc_array, mem_hier)}
     acc_name = os.path.basename(__file__)[:-3]
     accelerator = Accelerator(acc_name, core)
+
     return accelerator
 
 
-def get_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
-    # type: DIMC or AIMC
+def get_imc_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
+    ## type: pdigital, DIMC or AIMC
     # cols: int, can divide with 8
     # rows: int
     # D3: int
+    assert imc_type in ["pdigital", "AIMC", "DIMC"], f"imc_type {imc_type} not in [pdigital, AIMC, DIMC]"
+
+    ##################
+    ## dimensions
+    assert cols // 8 == cols / 8, f"cols {cols} cannot divide with 8."
+    dimensions = {
+        "D1": cols // 8,  # wordline dimension
+        "D2": rows,  # bitline dimension
+        "D3": D3,  # nb_macros
+    }  # {"D1": ("K", 4), "D2": ("C", 32),}
+
+    if imc_type == "pdigital":
+        tech_param_28nm = {}
+        hd_param = {}
+        return tech_param_28nm, hd_param, dimensions
 
     ##################
     ## tech_param
@@ -1076,15 +1258,6 @@ def get_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
         "xor2_dly": 0.0478 * 2.4,  # unit: ns
         # "dff_dly":  0.0478*3.4,         # unit: ns
     }
-
-    ##################
-    ## dimensions
-    assert cols // 8 == cols / 8, f"cols {cols} cannot divide with 8."
-    dimensions = {
-        "D1": cols // 8,  # wordline dimension
-        "D2": rows,  # bitline dimension
-        "D3": D3,  # nb_macros
-    }  # {"D1": ("K", 4), "D2": ("C", 32),}
 
     ##################
     ## hd_param
@@ -1116,6 +1289,22 @@ def get_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
     ## return para
     return tech_param_28nm, hd_param, dimensions
 
+def digital_array(dims):
+    # Data is from envision paper (https://ieeexplore.ieee.org/abstract/document/7870353)
+    # Tech: 28nm UTBB FD-SOI
+    # PE array area is estimated from the chip picture, with total size: 0.75mm x 1.29mm for 16 x 16 int16 PEs
+    # TOP/s/w: 2
+    # Supply voltage: 1 V
+    # Clock freq: 200 MHz
+    multiplier_input_precision = [8, 8]
+    multiplier_energy = 0.25  # unit: pJ/mac
+    multiplier_area = 0.75*1.29/256/4  # mm2
+    multiplier = Multiplier(
+        multiplier_input_precision, multiplier_energy, multiplier_area
+    )
+    multiplier_array = MultiplierArray(multiplier, dims)
+
+    return multiplier_array, multiplier_energy
 
 def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6):  # 4 ms by default
     #######################################################
@@ -1228,6 +1417,270 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
 
     return CF_PER_OP_fixed_time, tt_cf_bd_fixed_time, CF_PER_OP_fixed_work, tt_cf_bd_fixed_work, CF_PER_OP_fixed_time_ex_pkg,CF_PER_OP_fixed_work_ex_pkg
 
+def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_sizes: list, Dimensions: list, periods: dict):
+    # Run zigzag simulation for peak and tinyml workloads.
+    # workloads: peak, ds_cnn, ae, mobilenet, resnet8
+    # imc_types: aimc, dimc, pdigital
+    # sram_sizes: int
+    # Dimensions: int
+    # periods: float
+    data_vals = []
+    os.system("rm -rf outputs/*")
+    for workload in workloads:
+        for imc_type in imc_types:
+            for sram_size in sram_sizes:
+                for d in Dimensions:
+                    tech_param, hd_param, dims = get_imc_param_setting(imc_type=imc_type, cols=d, rows=d, D3=1)
+                    if workload == "peak":
+                        # peak performance assessment below
+                        if imc_type in ["AIMC", "DIMC"]:
+                            imc = ImcArray(tech_param, hd_param, dims)
+                            area_bd = imc.area_breakdown  # dict
+                            area_total = imc.total_area  # float (mm2)
+                            tclk_bd = imc.tclk_breakdown  # dict
+                            tclk_total = imc.tclk  # float (ns)
+                            peak_en_bd = imc.unit.get_peak_energy_single_cycle()
+                            peak_en_total = sum([v for v in peak_en_bd.values()])  # float (pJ)
+                            nb_of_ops = np.prod([x for x in dims.values()]) * hd_param["input_bit_per_cycle"] / hd_param[
+                                "input_precision"] * 2
+                        else:  # imc_type == "pdigital"
+                            parray, multiplier_energy = digital_array(dims)
+                            area_total = parray.total_area  # mm2
+                            area_bd = {"pe": area_total}
+                            tclk_bd = {"pe": 5}  # ns
+                            tclk_total = 5  # ns
+                            peak_en_bd = {"pe": multiplier_energy * np.prod(parray.dimension_sizes)}
+                            peak_en_total = np.prod(parray.dimension_sizes)  # pJ
+                            nb_of_ops = np.prod(parray.dimension_sizes) * 2
+
+                        cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
+                            energy=peak_en_total, lat=tclk_total, area=area_total,
+                            nb_of_ops=nb_of_ops, lifetime=3, chip_yield=0.95,
+                            fixed_work_period=periods["peak"])  # unit: g, CO2/MAC
+
+                        res = {
+                            "workload": workload,
+                            "imc_type": imc_type,
+                            "sram_size": sram_size,
+                            "dim": d,
+                            "ops": nb_of_ops,
+                            "area": area_bd,  # area breakdown (dict)
+                            "lat": 1,
+                            "tclk": tclk_bd,
+                            "en": peak_en_bd,
+                            "cf_ft": cf_bd_fixed_time,
+                            "cf_fw": cf_bd_fixed_work,
+                            "t_area": area_total,  # total area (float)
+                            "t_lat": 1,
+                            "t_tclk": tclk_total,
+                            "t_en": peak_en_total,
+                            "t_cf_ft": cf_total_fixed_time,
+                            "t_cf_fw": cf_total_fixed_work,
+                            "t_cf_ft_ex_pkg": cf_total_fixed_time_ex_pkg,
+                            "t_cf_fw_ex_pkg": cf_total_fixed_work_ex_pkg,
+                            "cme": None,
+                        }
+                        data_vals.append(res)
+                    else:
+                        # real workload performance assessment below
+                        if workload == "ds_cnn":
+                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/ds_cnn.onnx"
+                        elif workload == "ae":
+                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/deepautoencoder.onnx"
+                        elif workload == "mobilenet":
+                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/mobilenet_v1.onnx"
+                        elif workload == "resnet8":
+                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/resnet8.onnx"
+                        else:
+                            breakpoint()  # to be extended to other networks
+
+                        mapping = "zigzag.inputs.examples.mapping.default_imc"
+                        accelerator = get_accelerator(imc_type, tech_param, hd_param, dims, sram_size)
+
+                        # Call API
+                        hw_name = imc_type
+                        wl_name = re.split(r"/|\.", workload_dir)[-1]
+                        if wl_name == "onnx":
+                            wl_name = re.split(r"/|\.", workload_dir)[-2]
+                        experiment_id = f"{hw_name}-{wl_name}"
+                        pkl_name = f"{experiment_id}-saved_list_of_cmes"
+
+                        ans = get_hardware_performance_zigzag(
+                            workload_dir,
+                            accelerator,
+                            mapping,
+                            opt="EDP",
+                            dump_filename_pattern=f"outputs/{experiment_id}-layer_?.json",
+                            pickle_filename=f"outputs/{pkl_name}.pickle",
+                        )
+
+                        # Read output
+                        with open(f"outputs/{experiment_id}-layer_overall_complete.json", "r") as fp:
+                            dat = json.load(fp)
+                        en_total = dat["outputs"]["energy"]["energy_total"]  # float: pJ
+                        lat_total = dat["outputs"]["latency"]["computation"]  # float: cycles
+                        if imc_type in ["AIMC", "DIMC"]:
+                            area_total = dat["outputs"]["area (mm^2)"]["total_area"]  # float: mm2
+                            tclk_total = dat["outputs"]["clock"]["tclk (ns)"]  # float: ns
+                            # breakdown
+                            en_bd = {
+                                "array": dat["outputs"]["energy"]["operational_energy"],
+                                "mem": dat["outputs"]["energy"]["memory_energy"],
+                            }
+                            lat_bd = dat["outputs"]["latency"]["computation_breakdown"]
+                            area_bd = dat["outputs"]["area (mm^2)"]["total_area_breakdown:"]
+                            tclk_bd = dat["outputs"]["clock"]["tclk_breakdown (ns)"]
+                        else:
+                            parray, multiplier_energy = digital_array(dims)
+                            area_total = parray.total_area  # mm2
+                            tclk_total = 5  # ns
+                            en_bd = {}
+                            lat_bd = {}
+                            area_bd = {}
+                            tclk_bd = {}
+                        # calc CF (carbon footprint) (below is for g, CO2/op)
+                        # cf_total, cf_bd = calc_cf(energy=en_total, lat=lat_total*tclk_total, area=area_total, nb_of_ops=ops_workloads[workload], lifetime=3, chip_yield=0.95)
+                        # below is for g, CO2/inference
+                        cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
+                            energy=en_total, lat=lat_total * tclk_total, area=area_total,
+                            nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload])
+                        res = {
+                            "workload": workload,
+                            "imc_type": imc_type,
+                            "sram_size": sram_size,
+                            "dim": d,
+                            "ops": ops_workloads[workload],
+                            "area": area_bd,  # dict: mm2
+                            "lat": lat_bd,  # dict: cycles
+                            "tclk": tclk_bd,  # dict: ns
+                            "en": en_bd,  # dict: pJ
+                            "cf_ft": cf_bd_fixed_time,  # dict: g, CO2
+                            "cf_fw": cf_bd_fixed_work,
+                            "t_area": area_total,
+                            "t_lat": lat_total,
+                            "t_tclk": tclk_total,
+                            "t_en": en_total,
+                            "t_cf_ft": cf_total_fixed_time,
+                            "t_cf_fw": cf_total_fixed_work,
+                            "t_cf_ft_ex_pkg": cf_total_fixed_time_ex_pkg,
+                            "t_cf_fw_ex_pkg": cf_total_fixed_work_ex_pkg,
+                            "cme": ans[2],
+                        }
+                        data_vals.append(res)
+
+    df = pd.DataFrame(data_vals)
+
+    #########################################
+    ## Add geo-mean and calculation for topsw/tops/topsmm2 to the results gotten above
+    # Formula:
+    # TOP/s/W   = 1/(energy: pJ/op)
+    # TOP/s     = nbs_of_ops / (time: ps)
+    # TOP/s/mm2 = TOP/s / area: mm2
+    # Deduction (for a single inference):
+    # OP_CF = 301 * energy / (3.6 * (10**18)) / nb_of_ops # g, CO2/kWh * energy (pJ) / 3.6E18 / nb_of_ops
+    # => OP_CF = 301 / (3.6E18) * pJ/op = 301/(3.6E18) / (TOP/s/W) , (g, CO2)
+    # Fixed-time scenario:
+    # E_SOC = 1/chip_yield * (301*0.9+100+500)/100 * area: mm2 * runtime: ns / (lifetime: year * (3.1536 * 10 ** 16))
+    #       = 1/chip_yield * 8.71 * area:mm2 * runtime: ns / (9.4608E16) , (g, CO2)
+    # => E_SOC = 1/chip_yield * (0.921/E16) * mm2 * ns = 1/chip_yield * (0.921/E13) * nbs_of_ops/(TOP/s/mm2)
+    data_vals = []
+    for imc_type in imc_types:
+        for sram_size in sram_sizes:
+            for dim in Dimensions:
+                geo_topsw = 1
+                geo_tops = 1
+                geo_topsmm2 = 1
+                geo_ops = 1
+                geo_lat = 1
+                geo_en = 1
+                geo_cf_ft = 1
+                geo_cf_fw = 1
+                geo_cf_ft_ex_pkg = 1
+                geo_cf_fw_ex_pkg = 1
+                for workload in workloads:
+                    if workload == "geo":  # skip if it's for geo-mean (will be re-calculated)
+                        continue
+                    dff = df[(df.workload == workload) & (df.imc_type == imc_type) & (df.sram_size == sram_size) & (
+                                df.dim == dim)]
+                    # re-arrange the stored dict and add metrics
+                    new_res = {
+                        "workload": dff.workload.to_list()[0],
+                        "imc_type": dff.imc_type.to_list()[0],
+                        "sram_size": dff.sram_size.to_list()[0],
+                        "dim": dff.dim.to_list()[0],
+                        "ops": dff.ops.to_list()[0],
+                        "area": dff.area.to_list()[0],
+                        "lat": dff.lat.to_list()[0],
+                        "tclk": dff.tclk.to_list()[0],
+                        "en": dff.en.to_list()[0],
+                        "cf_ft": dff.cf_ft.to_list()[0],
+                        "cf_fw": dff.cf_fw.to_list()[0],
+                        "t_area": dff.t_area.to_list()[0],
+                        "t_lat": dff.t_lat.to_list()[0],
+                        "t_tclk": dff.t_tclk.to_list()[0],
+                        "t_en": dff.t_en.to_list()[0],
+                        "t_cf_ft": dff.t_cf_ft.to_list()[0],
+                        "t_cf_fw": dff.t_cf_fw.to_list()[0],
+                        "t_cf_ft_ex_pkg": dff.t_cf_ft_ex_pkg.to_list()[0],  # exclude package cost
+                        "t_cf_fw_ex_pkg": dff.t_cf_fw_ex_pkg.to_list()[0],  # exclude package cost
+                        "topsw": 1 / (dff.t_en.to_list()[0] / dff.ops.to_list()[0]),  # 1/(pJ/op)
+                        "tops": dff.ops.to_list()[0] / (dff.t_lat.to_list()[0] * dff.t_tclk.to_list()[0] * 1000),
+                        # ops/ps
+                        "topsmm2": dff.ops.to_list()[0] / (dff.t_lat.to_list()[0] * dff.t_tclk.to_list()[0] * 1000) /
+                                   dff.t_area.to_list()[0],
+                        "cme": dff.cme.to_list()[0],
+                    }
+                    if workload not in ["peak", "geo"]:
+                        geo_topsw *= new_res["topsw"]
+                        geo_tops *= new_res["tops"]
+                        geo_topsmm2 *= new_res["topsmm2"]
+                        geo_ops *= new_res["ops"]
+                        geo_lat *= new_res["t_lat"]
+                        geo_en *= new_res["t_en"]
+                        geo_cf_ft *= new_res["t_cf_ft"]
+                        geo_cf_fw *= new_res["t_cf_fw"]
+                        geo_cf_ft_ex_pkg *= new_res["t_cf_ft_ex_pkg"]
+                        geo_cf_fw_ex_pkg *= new_res["t_cf_fw_ex_pkg"]
+                    data_vals.append(new_res)
+                geo_topsw = geo_topsw ** (1 / len(workloads))
+                geo_tops = geo_tops ** (1 / len(workloads))
+                geo_topsmm2 = geo_topsmm2 ** (1 / len(workloads))
+                geo_cf_ft = geo_cf_ft ** (1 / len(workloads))
+                geo_cf_fw = geo_cf_fw ** (1 / len(workloads))
+                geo_cf_ft_ex_pkg = geo_cf_ft_ex_pkg ** (1 / len(workloads))
+                geo_cf_fw_ex_pkg = geo_cf_fw_ex_pkg ** (1 / len(workloads))
+                geo_res = {
+                    "workload": "geo",
+                    "imc_type": imc_type,
+                    "sram_size": sram_size,
+                    "dim": dim,
+                    "ops": geo_ops,
+                    "area": new_res["area"],
+                    "lat": None,
+                    "tclk": new_res["tclk"],
+                    "en": None,
+                    "cf_ft": None,
+                    "cf_fw": None,
+                    "t_area": new_res["t_area"],
+                    "t_lat": geo_lat,
+                    "t_tclk": new_res["t_tclk"],
+                    "t_en": geo_en,
+                    "t_cf_ft": geo_cf_ft,
+                    "t_cf_fw": geo_cf_fw,
+                    "t_cf_ft_ex_pkg": geo_cf_ft_ex_pkg,
+                    "t_cf_fw_ex_pkg": geo_cf_fw_ex_pkg,
+                    "topsw": geo_topsw,
+                    "tops": geo_tops,
+                    "topsmm2": geo_topsmm2,
+                }
+                data_vals.append(geo_res)
+    new_df = pd.DataFrame(data_vals)
+    df = new_df
+
+    # save df to pickle
+    with open("expr_res.pkl", "wb") as fp:
+        pickle.dump(df, fp)
+    print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
 
 if __name__ == "__main__":
     #########################################
@@ -1241,268 +1694,41 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    # Step 1: extract m factor (carbon/area) for different tech nodes. Data comes from ACT paper above.
+    ## Step 1: extract m factor (carbon/area) for different tech nodes. Data comes from ACT paper above.
     # plot_m_factor_across_techs()
-    # Step 2: calculate activation period, #mac/inference for tinyml benchmarks
+
+    ## Step 2 (no function involved): calculate activation period, #mac/inference for tinyml benchmarks
     # ds-cnn (keyword spotting): 16 kHz (6.25e+4 ns) sampling rate, 2_656_768 macs/inference
     # mobilenet (visual weak words): 0.75 FPS (1.3s/inference), 7_489_644 macs/inference
     # resnet8 (imagenet): 25 FPS, 12_501_632 macs/inference
     # autoencoder (anomaly detection): 16 KHz (6.25e+4 ns) sampling rate, 264_192 macs/inference
     # geo-mean: 346.41 Hz (2886752.69 ns/cycle), 986315636 macs/inference
-    # Step 3: plot carbon cost in literature
-    plot_carbon_footprint_across_years_in_literature(period=2886752.69,  # unit: ns
-                                                     op_per_task=986_315_636 * 2)  # unit: ops/inference
+
+    ## Step 3: plot carbon cost in literature
+    # plot_carbon_footprint_across_years_in_literature(period=2886752.69,  # unit: ns
+    #                                                  op_per_task=986_315_636 * 2)  # unit: ops/inference
     #########################################
-    ## parameter setting
+    ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
+    ## Step 0: simulation parameter setting
     # workload: peak & ae from MLPerf Tiny
     # variables: cols_nbs => [32, 64, .., 1024]
     # variables: rows_nbs => rows_nbs = cols_nbs
     # variables:
-    periods = {"peak": 3.4e+9, "ae": 10e+9, "ds_cnn": 1e+9, "mobilenet": 1.3e+9, "resnet8": 1.3e+9}  # unit: ns
+    periods = {"peak": 1, "ae": 1e+9/48000, "ds_cnn": 1e+9/16000, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25}  # unit: ns
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
-    workloads = ["ae", "ds_cnn", "mobilenet", "resnet8", "peak"]  # peak: macro-level peak  # options of workloads
-    imc_types = ["AIMC", "DIMC"]
-    sram_sizes = [32*1024, 64*1024, 128*1024, 256*1024, 512*1024, 1024*1024, 2048*1024]
-    ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}
-    pickle_exist = True  # read output directly if the output is saved in the last run
+    workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
+    imc_types = ["pdigital", "AIMC", "DIMC"]  # pure digital, aimc, dimc
+    # sram_sizes = [32*1024, 64*1024, 128*1024, 256*1024, 512*1024, 1024*1024, 2048*1024]
+    sram_sizes = [256 * 1024]
+    # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}
+    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}
+    pickle_exist = False  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
         #########################################
         ## Simulation
-        data_vals = []
-        os.system("rm -rf outputs/*")
-        for workload in workloads:
-            for imc_type in imc_types:
-                for sram_size in sram_sizes:
-                    for d in Dimensions:
-                        tech_param, hd_param, dims = get_param_setting(imc_type=imc_type, cols=d, rows=d, D3=1)
-                        if workload == "peak":
-                            # peak performance assessment below
-                            imc = ImcArray(tech_param, hd_param, dims)
-                            area_bd = imc.area_breakdown  # dict
-                            area_total = imc.total_area  # float (mm2)
-                            tclk_bd = imc.tclk_breakdown  # dict
-                            tclk_total = imc.tclk  # float (ns)
-                            peak_en_bd = imc.unit.get_peak_energy_single_cycle()
-                            peak_en_total = sum([v for v in peak_en_bd.values()])  # float (pJ)
-                            nb_of_ops = np.prod([x for x in dims.values()]) * hd_param["input_bit_per_cycle"] / hd_param[
-                                "input_precision"] * 2
-                            cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
-                                energy=peak_en_total, lat=tclk_total, area=area_total,
-                                nb_of_ops=nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=periods["peak"])  # unit: g, CO2/MAC
-
-                            res = {
-                                "workload": workload,
-                                "imc_type": imc_type,
-                                "sram_size": sram_size,
-                                "dim": d,
-                                "ops": nb_of_ops,
-                                "area": area_bd,  # area breakdown (dict)
-                                "lat": 1,
-                                "tclk": tclk_bd,
-                                "en": peak_en_bd,
-                                "cf_ft": cf_bd_fixed_time,
-                                "cf_fw": cf_bd_fixed_work,
-                                "t_area": area_total,  # total area (float)
-                                "t_lat": 1,
-                                "t_tclk": tclk_total,
-                                "t_en": peak_en_total,
-                                "t_cf_ft": cf_total_fixed_time,
-                                "t_cf_fw": cf_total_fixed_work,
-                                "t_cf_ft_ex_pkg": cf_total_fixed_time_ex_pkg,
-                                "t_cf_fw_ex_pkg": cf_total_fixed_work_ex_pkg,
-                                "cme": None,
-                            }
-                            data_vals.append(res)
-                        else:
-                            # real workload performance assessment below
-                            if workload == "ds_cnn":
-                                workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/ds_cnn.onnx"
-                            elif workload == "ae":
-                                workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/deepautoencoder.onnx"
-                            elif workload == "mobilenet":
-                                workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/mobilenet_v1.onnx"
-                            elif workload == "resnet8":
-                                workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/resnet8.onnx"
-                            else:
-                                breakpoint()  # to be filled
-
-                            mapping = "zigzag.inputs.examples.mapping.default_imc"
-                            accelerator = get_accelerator(imc_type, tech_param, hd_param, dims, sram_size)
-
-                            # Call API
-                            hw_name = imc_type
-                            wl_name = re.split(r"/|\.", workload_dir)[-1]
-                            if wl_name == "onnx":
-                                wl_name = re.split(r"/|\.", workload_dir)[-2]
-                            experiment_id = f"{hw_name}-{wl_name}"
-                            pkl_name = f"{experiment_id}-saved_list_of_cmes"
-
-                            ans = get_hardware_performance_zigzag(
-                                workload_dir,
-                                accelerator,
-                                mapping,
-                                opt="EDP",
-                                dump_filename_pattern=f"outputs/{experiment_id}-layer_?.json",
-                                pickle_filename=f"outputs/{pkl_name}.pickle",
-                            )
-
-                            # Read output
-                            with open(f"outputs/{experiment_id}-layer_overall_complete.json", "r") as fp:
-                                dat = json.load(fp)
-                            en_total = dat["outputs"]["energy"]["energy_total"]  # float: pJ
-                            lat_total = dat["outputs"]["latency"]["computation"]  # float: cycles
-                            area_total = dat["outputs"]["area (mm^2)"]["total_area"]  # float: mm2
-                            tclk_total = dat["outputs"]["clock"]["tclk (ns)"]  # float: ns
-                            # breakdown
-                            en_bd = {
-                                "array": dat["outputs"]["energy"]["operational_energy"],
-                                "mem": dat["outputs"]["energy"]["memory_energy"],
-                            }
-                            lat_bd = dat["outputs"]["latency"]["computation_breakdown"]
-                            area_bd = dat["outputs"]["area (mm^2)"]["total_area_breakdown:"]
-                            tclk_bd = dat["outputs"]["clock"]["tclk_breakdown (ns)"]
-                            # calc CF (carbon footprint) (below is for g, CO2/op)
-                            # cf_total, cf_bd = calc_cf(energy=en_total, lat=lat_total*tclk_total, area=area_total, nb_of_ops=ops_workloads[workload], lifetime=3, chip_yield=0.95)
-                            # below is for g, CO2/inference
-                            cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
-                                energy=en_total, lat=lat_total * tclk_total, area=area_total,
-                                nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload])
-                            res = {
-                                "workload": workload,
-                                "imc_type": imc_type,
-                                "sram_size": sram_size,
-                                "dim": d,
-                                "ops": ops_workloads[workload],
-                                "area": area_bd,  # dict: mm2
-                                "lat": lat_bd,  # dict: cycles
-                                "tclk": tclk_bd,  # dict: ns
-                                "en": en_bd,  # dict: pJ
-                                "cf_ft": cf_bd_fixed_time,  # dict: g, CO2
-                                "cf_fw": cf_bd_fixed_work,
-                                "t_area": area_total,
-                                "t_lat": lat_total,
-                                "t_tclk": tclk_total,
-                                "t_en": en_total,
-                                "t_cf_ft": cf_total_fixed_time,
-                                "t_cf_fw": cf_total_fixed_work,
-                                "t_cf_ft_ex_pkg": cf_total_fixed_time_ex_pkg,
-                                "t_cf_fw_ex_pkg": cf_total_fixed_work_ex_pkg,
-                                "cme": ans[2],
-                            }
-                            data_vals.append(res)
-
-        df = pd.DataFrame(data_vals)
-
-        #########################################
-        ## Add geo-mean and calculation for topsw/tops/topsmm2 to the results gotten above
-        # Formula:
-        # TOP/s/W   = 1/(energy: pJ/op)
-        # TOP/s     = nbs_of_ops / (time: ps)
-        # TOP/s/mm2 = TOP/s / area: mm2
-        # Deduction (for a single inference):
-        # OP_CF = 301 * energy / (3.6 * (10**18)) / nb_of_ops # g, CO2/kWh * energy (pJ) / 3.6E18 / nb_of_ops
-        # => OP_CF = 301 / (3.6E18) * pJ/op = 301/(3.6E18) / (TOP/s/W) , (g, CO2)
-        # Fixed-time scenario:
-        # E_SOC = 1/chip_yield * (301*0.9+100+500)/100 * area: mm2 * runtime: ns / (lifetime: year * (3.1536 * 10 ** 16))
-        #       = 1/chip_yield * 8.71 * area:mm2 * runtime: ns / (9.4608E16) , (g, CO2)
-        # => E_SOC = 1/chip_yield * (0.921/E16) * mm2 * ns = 1/chip_yield * (0.921/E13) * nbs_of_ops/(TOP/s/mm2)
-        data_vals = []
-        for imc_type in imc_types:
-            for sram_size in sram_sizes:
-                for dim in Dimensions:
-                    geo_topsw = 1
-                    geo_tops = 1
-                    geo_topsmm2 = 1
-                    geo_ops = 1
-                    geo_lat = 1
-                    geo_en = 1
-                    geo_cf_ft = 1
-                    geo_cf_fw = 1
-                    geo_cf_ft_ex_pkg = 1
-                    geo_cf_fw_ex_pkg = 1
-                    for workload in workloads:
-                        if workload == "geo":  # skip if it's for geo-mean (will be re-calculated)
-                            continue
-                        dff = df[(df.workload == workload) & (df.imc_type == imc_type) & (df.sram_size == sram_size) & (df.dim == dim)]
-                        new_res = {
-                            "workload": dff.workload.to_list()[0],
-                            "imc_type": dff.imc_type.to_list()[0],
-                            "sram_size": dff.sram_size.to_list()[0],
-                            "dim": dff.dim.to_list()[0],
-                            "ops": dff.ops.to_list()[0],
-                            "area": dff.area.to_list()[0],
-                            "lat": dff.lat.to_list()[0],
-                            "tclk": dff.tclk.to_list()[0],
-                            "en": dff.en.to_list()[0],
-                            "cf_ft": dff.cf_ft.to_list()[0],
-                            "cf_fw": dff.cf_fw.to_list()[0],
-                            "t_area": dff.t_area.to_list()[0],
-                            "t_lat": dff.t_lat.to_list()[0],
-                            "t_tclk": dff.t_tclk.to_list()[0],
-                            "t_en": dff.t_en.to_list()[0],
-                            "t_cf_ft": dff.t_cf_ft.to_list()[0],
-                            "t_cf_fw": dff.t_cf_fw.to_list()[0],
-                            "t_cf_ft_ex_pkg": dff.t_cf_ft_ex_pkg.to_list()[0],  # exclude package cost
-                            "t_cf_fw_ex_pkg": dff.t_cf_fw_ex_pkg.to_list()[0],  # exclude package cost
-                            "topsw": 1 / (dff.t_en.to_list()[0] / dff.ops.to_list()[0]),  # 1/(pJ/op)
-                            "tops": dff.ops.to_list()[0] / (dff.t_lat.to_list()[0] * dff.t_tclk.to_list()[0] * 1000),
-                            # ops/ps
-                            "topsmm2": dff.ops.to_list()[0] / (dff.t_lat.to_list()[0] * dff.t_tclk.to_list()[0] * 1000) /
-                                       dff.t_area.to_list()[0],
-                            "cme": dff.cme.to_list()[0],
-                        }
-                        if workload not in ["peak", "geo"]:
-                            geo_topsw *= new_res["topsw"]
-                            geo_tops *= new_res["tops"]
-                            geo_topsmm2 *= new_res["topsmm2"]
-                            geo_ops *= new_res["ops"]
-                            geo_lat *= new_res["t_lat"]
-                            geo_en *= new_res["t_en"]
-                            geo_cf_ft *= new_res["t_cf_ft"]
-                            geo_cf_fw *= new_res["t_cf_fw"]
-                            geo_cf_ft_ex_pkg *= new_res["t_cf_ft_ex_pkg"]
-                            geo_cf_fw_ex_pkg *= new_res["t_cf_fw_ex_pkg"]
-                        data_vals.append(new_res)
-                    geo_topsw = geo_topsw ** (1 / len(workloads))
-                    geo_tops = geo_tops ** (1 / len(workloads))
-                    geo_topsmm2 = geo_topsmm2 ** (1 / len(workloads))
-                    geo_cf_ft = geo_cf_ft ** (1 / len(workloads))
-                    geo_cf_fw = geo_cf_fw ** (1 / len(workloads))
-                    geo_cf_ft_ex_pkg = geo_cf_ft_ex_pkg ** (1 / len(workloads))
-                    geo_cf_fw_ex_pkg = geo_cf_fw_ex_pkg ** (1 / len(workloads))
-                    geo_res = {
-                        "workload": "geo",
-                        "imc_type": imc_type,
-                        "sram_size": sram_size,
-                        "dim": dim,
-                        "ops": geo_ops,
-                        "area": new_res["area"],
-                        "lat": None,
-                        "tclk": new_res["tclk"],
-                        "en": None,
-                        "cf_ft": None,
-                        "cf_fw": None,
-                        "t_area": new_res["t_area"],
-                        "t_lat": geo_lat,
-                        "t_tclk": new_res["t_tclk"],
-                        "t_en": geo_en,
-                        "t_cf_ft": geo_cf_ft,
-                        "t_cf_fw": geo_cf_fw,
-                        "t_cf_ft_ex_pkg": geo_cf_ft_ex_pkg,
-                        "t_cf_fw_ex_pkg": geo_cf_fw_ex_pkg,
-                        "topsw": geo_topsw,
-                        "tops": geo_tops,
-                        "topsmm2": geo_topsmm2,
-                    }
-                    data_vals.append(geo_res)
-        new_df = pd.DataFrame(data_vals)
-        df = new_df
-
-        # save df to pickle
-        with open("expr_res.pkl", "wb") as fp:
-            pickle.dump(df, fp)
-        print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
+        zigzag_similation_and_result_storage(workloads=workloads, imc_types=imc_types, sram_sizes=sram_sizes,
+                                             Dimensions=Dimensions, periods=periods)
     else:
         pass
         ## load df from pickle
