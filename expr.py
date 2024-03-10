@@ -644,7 +644,7 @@ def plot_curve(i_df, imc_types, workload, sram_size=256*1024):
     # a fixed workload and sram size.
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
-    markers = ["o", "^"]
+    markers = ["s", "o", "^"]
     width = 0.35
     font_size = 15
     df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
@@ -703,6 +703,138 @@ def plot_curve(i_df, imc_types, workload, sram_size=256*1024):
         cf_fw_cur.set_ylim(0, 4e-9)  # manually set the range
 
     # plt.text(0.5, -0.1, f"IMC size (#rows $\\times$ #cols)", ha="center", va="center", fontsize=20)  # does not work well
+    plt.tight_layout()
+    plt.show()
+
+def plot_carbon_curve(i_df, imc_types, workload, sram_size=256*1024, period=1):
+    # This function is to plot carbon cost breakdown (in curve) for pdigital, aimc and dimc, under fixed workload and fixed sram size.
+    # The output figure consists of 2 subplots (x-axis: area):
+    # 1th (left): carbon footprint breakdown (fixed-time)
+    # 2th (right): carbon footprint breakdown (fixed-work)
+    # Within all subplots: from left to right bar: pdigital, AIMC, DIMC.
+    colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+              u'#bcbd22', u'#17becf']
+    markers = ["s", "o", "^"]
+    width = 0.35
+    font_size = 15
+    df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
+    df["imc"] = df.dim.astype(str) + f"$\\times$" + df.dim.astype(str)
+
+    fig_rows_nbs = 3
+    fig_cols_nbs = 2
+    fig, axs = plt.subplots(nrows=fig_rows_nbs, ncols=fig_cols_nbs, figsize=(10, 8))
+    cf_ft_cur = axs[0][0]  # CF/inference
+    cf_fw_cur = axs[0][1]  # CF/inference
+
+    for ii_a, a in enumerate(imc_types):
+        dff = df[df.imc_type == a]
+        # Create positions for the bars on the x-axis
+        x_pos = dff.t_area.to_numpy()
+        # Due to cacti, the peripheral mem area for 64x64 imc array is smaller than 32x32 imc array, this looks weird
+        # Use following code to fix it.
+        if x_pos[1] < x_pos[0]:
+            mem_area = dff.iloc[0].area["mem_area"]
+            updt_area = dff.iloc[1].area["imc_area"] + mem_area
+            x_pos = np.array([x_pos[0], updt_area] + x_pos[2:].tolist())
+
+        # Plot cf (fixed-time)
+        cf_ft = dff.t_cf_ft_ex_pkg.to_numpy()
+        cf_ft_cur.plot(x_pos, cf_ft, label=a, color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
+                       linestyle="-")
+
+        if ii_a == 0:
+            for x, y, txt in zip(x_pos, cf_ft, dff.imc):
+                cf_ft_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
+
+        # Plot cf (fixed-work)
+        cf_fw = dff.t_cf_fw_ex_pkg.to_numpy()
+        cf_fw_cur.plot(x_pos, cf_fw, label=a, color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
+                       linestyle="-")
+
+        # Plot cf breakdown (fixed-time)
+        cf_ft_bd = dff.cf_ft.to_numpy()
+        cf_ft_operational = []
+        cf_ft_embodied = []
+        cf_ft_dram = []
+        for i in range(len(cf_ft_bd)):
+            operational_carbon = cf_ft_bd[i]["opcf"]
+            embodied_carbon = cf_ft_bd[i]["soc_epa"] + cf_ft_bd[i]["soc_gpa"] + cf_ft_bd[i]["soc_mpa"]
+            dram_carbon = cf_ft_bd[i]["dram"]
+            cf_ft_operational.append(operational_carbon)
+            cf_ft_embodied.append(embodied_carbon)
+            cf_ft_dram.append(dram_carbon)
+        cf_ft_operational = np.array(cf_ft_operational)
+        cf_ft_embodied = np.array(cf_ft_embodied)
+        cf_ft_dram = np.array(cf_ft_dram)
+        axs[1][0].plot(x_pos, cf_ft_operational, label=f"{a}-opcf", color="black", marker=markers[ii_a],
+                       markeredgecolor="black",
+                       markerfacecolor="blue",
+                       linestyle="--")
+        axs[1][0].plot(x_pos, cf_ft_embodied, label=f"{a}-edcf", color="black", marker=markers[ii_a],
+                       markeredgecolor="black",
+                       markerfacecolor="red",
+                       linestyle="--")
+        # cf_ft_cur.plot(x_pos, cf_ft_dram, label="dramcf", color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
+        #                linestyle="--")
+
+        # Plot cf breakdown (fixed-work)
+        cf_fw_bd = dff.cf_fw.to_numpy()
+        cf_fw_operational = []
+        cf_fw_embodied = []
+        cf_fw_dram = []
+        for i in range(len(cf_fw_bd)):
+            operational_carbon = cf_fw_bd[i]["opcf"]
+            embodied_carbon = cf_fw_bd[i]["soc_epa"] + cf_fw_bd[i]["soc_gpa"] + cf_fw_bd[i]["soc_mpa"]
+            dram_carbon = cf_fw_bd[i]["dram"]
+            cf_fw_operational.append(operational_carbon)
+            cf_fw_embodied.append(embodied_carbon)
+            cf_fw_dram.append(dram_carbon)
+        cf_fw_operational = np.array(cf_fw_operational)
+        cf_fw_embodied = np.array(cf_fw_embodied)
+        cf_fw_dram = np.array(cf_fw_dram)
+        axs[1][1].plot(x_pos, cf_fw_operational, label=f"{a}-opcf", color="black", marker=markers[ii_a],
+                       markeredgecolor="black",
+                       markerfacecolor="blue",
+                       linestyle="--")
+        axs[1][1].plot(x_pos, cf_fw_embodied, label=f"{a}-edcf", color="black", marker=markers[ii_a],
+                       markeredgecolor="black",
+                       markerfacecolor="red",
+                       linestyle="--")
+        # cf_fw_cur.plot(x_pos, cf_fw_dram, label="dramcf", color=colors[ii_a], marker=markers[ii_a],
+        #                markeredgecolor="black",
+        #                linestyle="--")
+
+        # Plot latency
+        lat = dff.t_lat.to_numpy() * dff.t_tclk.to_numpy()
+        axs[2][0].plot(x_pos, lat, label=a, color=colors[ii_a], marker=markers[ii_a],
+                       markeredgecolor="black",
+                       linestyle="--")
+        axs[2][1].plot(x_pos, [period]*len(x_pos), label=a, color=colors[ii_a], marker=markers[ii_a],
+                       markeredgecolor="black",
+                       linestyle="--")
+
+    # configuration
+    for i in range(0, fig_rows_nbs):
+        for j in range(0, fig_cols_nbs):
+            axs[i][j].set_xscale("log")
+            axs[i][j].set_yscale("log")
+            axs[i][j].grid(which="both")
+            axs[i][j].set_axisbelow(True)
+            axs[i][j].legend(loc="upper right")
+    axs[fig_rows_nbs-1][0].set_xlabel(f"Area (mm$^2$)")
+    axs[fig_rows_nbs-1][1].set_xlabel(f"Area (mm$^2$)")
+    axs[1][0].set_ylabel(f"g, CO$_2$/Inference (fixed-time)", fontsize=font_size)
+    axs[1][1].set_ylabel(f"g, CO$_2$/Inference (fixed-work)", fontsize=font_size)
+    axs[2][0].set_ylabel(f"ns/Inference", fontsize=font_size)
+    axs[2][1].set_ylabel(f"ns/Inference", fontsize=font_size)
+    axs[0][0].set_title(f"Total [{workload}]")
+    axs[1][0].set_title("Carbon breakdown")
+    axs[2][0].set_title("Inference speed")
+
+    # if workload == "geo":
+    #     cf_ft_cur.set_ylim(0, 4e-9)  # manually set the range
+    #     cf_fw_cur.set_ylim(0, 4e-9)  # manually set the range
+
     plt.tight_layout()
     plt.show()
 
@@ -871,8 +1003,8 @@ def plot_bar(i_df, imc_types, workload, sram_size=256*1024):
         cf_ft_bar.set_ylabel(f"g, CO$_2$/Op (fixed-time)", fontsize=font_size)
         cf_fw_bar.set_ylabel(f"g, CO$_2$/Op (fixed-work)", fontsize=font_size)
 
-    cf_ft_bar.set_ylim(0, 4e-9)  # manually set the range
-    cf_fw_bar.set_ylim(0, 4e-9)  # manually set the range
+    # cf_ft_bar.set_ylim(0, 4e-9)  # manually set the range
+    # cf_fw_bar.set_ylim(0, 4e-9)  # manually set the range
 
     # plt.text(0.5, -0.1, f"IMC size (#rows $\\times$ #cols)", ha="center", va="center", fontsize=20)  # does not work well
     plt.tight_layout()
@@ -1381,6 +1513,9 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
     # - scale_factor will be fixed for all fabrication cost.
     runtime = fixed_work_period  # ns
     scale_factor = runtime / (lifetime * (3.1536 * 10 ** 16)) / nb_of_ops
+    # What if fixed_work_period < lat? Then we need multiple chips, so the embodied footprint will increase.
+    if fixed_work_period < lat:
+        scale_factor *= lat/fixed_work_period
     # Operational cost
     OP_CF = OP_CF
     # SOC fabrication cost
@@ -1424,6 +1559,8 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
     # sram_sizes: int
     # Dimensions: int
     # periods: float
+    import time
+    trig_time = time.time()
     data_vals = []
     os.system("rm -rf outputs/*")
     for workload in workloads:
@@ -1532,7 +1669,7 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                             tclk_bd = dat["outputs"]["clock"]["tclk_breakdown (ns)"]
                         else:
                             parray, multiplier_energy = digital_array(dims)
-                            area_total = parray.total_area  # mm2
+                            area_total = parray.total_area + np.sum(dat["inputs"]["accelerator"]["cores"]["memory_level_area"])  # mm2
                             tclk_total = 5  # ns
                             en_bd = {}
                             lat_bd = {}
@@ -1681,6 +1818,25 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
     with open("expr_res.pkl", "wb") as fp:
         pickle.dump(df, fp)
     print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
+    targ_time = time.time()
+    sim_time = round(targ_time-trig_time, 1)
+    print(f"Simulation time: {sim_time} sec.")
+
+def experiment_1_literature_trend():
+    ## Experiment 1: carbon for papers in literature
+    ## Step 1: extract m factor (carbon/area) for different tech nodes. Data comes from ACT paper above.
+    # plot_m_factor_across_techs()
+
+    ## Step 2 (no function involved): calculate activation period, #mac/inference for tinyml benchmarks
+    # ds-cnn (keyword spotting): 16 kHz (6.25e+4 ns) sampling rate, 2_656_768 macs/inference
+    # mobilenet (visual weak words): 0.75 FPS (1.3s/inference), 7_489_644 macs/inference
+    # resnet8 (imagenet): 25 FPS, 12_501_632 macs/inference
+    # autoencoder (anomaly detection): 16 KHz (6.25e+4 ns) sampling rate, 264_192 macs/inference
+    # geo-mean: 346.41 Hz (2886752.69 ns/cycle), 986315636 macs/inference
+
+    ## Step 3: plot carbon cost in literature
+    plot_carbon_footprint_across_years_in_literature(period=2886752.69,  # unit: ns
+                                                     op_per_task=986_315_636 * 2)  # unit: ops/inference
 
 if __name__ == "__main__":
     #########################################
@@ -1694,19 +1850,7 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    ## Step 1: extract m factor (carbon/area) for different tech nodes. Data comes from ACT paper above.
-    # plot_m_factor_across_techs()
-
-    ## Step 2 (no function involved): calculate activation period, #mac/inference for tinyml benchmarks
-    # ds-cnn (keyword spotting): 16 kHz (6.25e+4 ns) sampling rate, 2_656_768 macs/inference
-    # mobilenet (visual weak words): 0.75 FPS (1.3s/inference), 7_489_644 macs/inference
-    # resnet8 (imagenet): 25 FPS, 12_501_632 macs/inference
-    # autoencoder (anomaly detection): 16 KHz (6.25e+4 ns) sampling rate, 264_192 macs/inference
-    # geo-mean: 346.41 Hz (2886752.69 ns/cycle), 986315636 macs/inference
-
-    ## Step 3: plot carbon cost in literature
-    # plot_carbon_footprint_across_years_in_literature(period=2886752.69,  # unit: ns
-    #                                                  op_per_task=986_315_636 * 2)  # unit: ops/inference
+    # experiment_1_literature_trend()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -1717,7 +1861,7 @@ if __name__ == "__main__":
     periods = {"peak": 1, "ae": 1e+9/48000, "ds_cnn": 1e+9/16000, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25}  # unit: ns
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
-    imc_types = ["pdigital", "AIMC", "DIMC"]  # pure digital, aimc, dimc
+    imc_types = ["AIMC", "DIMC"]  # pdigital (pure digital), aimc, dimc
     # sram_sizes = [32*1024, 64*1024, 128*1024, 256*1024, 512*1024, 1024*1024, 2048*1024]
     sram_sizes = [256 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}
@@ -1731,27 +1875,31 @@ if __name__ == "__main__":
                                              Dimensions=Dimensions, periods=periods)
     else:
         pass
-        ## load df from pickle
-        # with open("expr_res.pkl", "rb") as fp:
-        #     df = pickle.load(fp)
-        # workloads.append("geo")  # append geo so that plotting for geo is also supported
+        ## Step 1: load df from pickle
+        with open("expr_res.pkl", "rb") as fp:
+            df = pickle.load(fp)
+        workloads.append("geo")  # append geo so that plotting for geo is also supported
 
+        ## Step 2:
         #########################################
         ## Visualization (Experiment playground)
         #######################
         ## Experiment: sweeping imc size, fixing sram size
-        # workload = "geo"
-        # sram_size = 256*1024
-        # assert workload in workloads, f"Legal workload: {workloads}"
-        # assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
-        # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
-        #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
-        #                            "different to each other."
+        workload = "ds_cnn"
+        sram_size = 256*1024
+        df = df[(df.workload == workload) & (df.sram_size == sram_size)]
+        assert workload in workloads, f"Legal workload: {workloads}"
+        assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
+        assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
+                                   "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
+                                   "different to each other."
+        ## plot curve for different carbon components
+        # plot_carbon_curve(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size, period=periods[workload])
         ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size
-        # plot_bar(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
+        plot_bar(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
-        # breakpoint()
+        breakpoint()
 
         #######################
         ## Experiment: sweeping sram size, fixing imc size
