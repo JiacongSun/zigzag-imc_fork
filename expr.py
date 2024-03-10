@@ -138,7 +138,7 @@ def plot_carbon_footprint_in_literature(data, period=4e+6):
     # fig3: cf breakdown (fixed-time) vs. cf breakdown (fixed-work)
     pass
 
-def plot_carbon_footprint_across_years_in_literature(data, period=4e+3):
+def plot_carbon_footprint_across_years_in_literature(data, period=4e+3, op_per_task=1):
     # This function is to plot carbon footprint in literature across different years, for sram-based in-memory computing accelerators.
     # x axis: years
     # there are in total 7 subplots
@@ -151,6 +151,7 @@ def plot_carbon_footprint_across_years_in_literature(data, period=4e+3):
     # fig7: cf breakdown (fixed-work) vs. years
     # Marker: o: AIMC, square: DIMC.
     # @para period: the average activation period per task (unit: ns)
+    # @para op_per_task: the number of ops per inference (used to calculate the carbon per inference)
     # order:
     # doi, year, IMC type, tech(nm), input precision, topsw (peak-macro), tops (peak-macro), topsmm2 (peak-macro), imc_size
     # all metrics are normalized to 8b precision
@@ -227,9 +228,9 @@ def plot_carbon_footprint_across_years_in_literature(data, period=4e+3):
             topsws = res[:,5].astype(float).tolist()
             topss = res[:,6].astype(float).tolist()
             topsmm2s = res[:,7].astype(float).tolist()
-            paralls = res[:,8].astype(float).tolist()
+            paralls = res[:,8].astype(float).tolist()  # ops/cycle
             techs = res[:, 3].astype(int).tolist()
-            m_factors = {28: 8.71,
+            m_factors = {28: 8.71,  # g, CO2/mm2. Relevant to Technology nodes.
                          20: 9.71,
                          14: 9.86,
                          10: 10.94,
@@ -253,14 +254,21 @@ def plot_carbon_footprint_across_years_in_literature(data, period=4e+3):
                 tops = topss[idx]
                 topsmm2 = topsmm2s[idx]
                 tech = techs[idx]
-                operational_carbon = k1/topsw
+                operational_carbon = k1/topsw  # g, CO2/op
+                # Convert unit to g, CO2/task
+                operational_carbon *= op_per_task  # g, CO2/task
+
                 m = m_factors[tech]
                 k2 = m/chip_yield/lifetime / (365*24*60*60E+12)  # g, CO2/mm2/ps
                 parallel = paralls[idx]
-                embodied_carbon_ft = k2/topsmm2
+                embodied_carbon_ft = k2/topsmm2  # g, CO2/op
                 embodied_carbon_fw = k2 * (period * 1000) * tops/topsmm2 / parallel  # period: unit: ns -> ps
-                cf_ft = operational_carbon + embodied_carbon_ft
-                cf_fw = operational_carbon + embodied_carbon_fw
+                # Convert unit to g, CO2/task
+                embodied_carbon_ft *= op_per_task
+                embodied_carbon_fw *= op_per_task
+
+                cf_ft = operational_carbon + embodied_carbon_ft  # unit: g, carbon/task
+                cf_fw = operational_carbon + embodied_carbon_fw  # unit: g, carbon/task
                 cf_fts.append(cf_ft)
                 cf_fws.append(cf_fw)
                 pie_cf_fts.append([operational_carbon/cf_ft, 1-operational_carbon/cf_ft])
@@ -313,10 +321,10 @@ def plot_carbon_footprint_across_years_in_literature(data, period=4e+3):
     topsw_cur.set_ylabel(f"TOP/s/W (peak)", fontsize=font_size)
     tops_cur.set_ylabel(f"TOP/s (peak)", fontsize=font_size)
     topsmm2_cur.set_ylabel(f"TOP/s/mm$^2$ (peak)", fontsize=font_size)
-    cf_ft_cur.set_ylabel(f"g, CO$_2$/op (fixed-time)", fontsize=font_size)
-    cf_fw_cur.set_ylabel(f"g, CO$_2$/op (fixed-work)", fontsize=font_size)
-    pie_cf_ft_cur.set_ylabel(f"g, CO$_2$/op (fixed-time)", fontsize=font_size)
-    pie_cf_fw_cur.set_ylabel(f"g, CO$_2$/op (fixed-work)", fontsize=font_size)
+    cf_ft_cur.set_ylabel(f"g, CO$_2$/inference (fixed-time)", fontsize=font_size)
+    cf_fw_cur.set_ylabel(f"g, CO$_2$/inference (fixed-work)", fontsize=font_size)
+    pie_cf_ft_cur.set_ylabel(f"g, CO$_2$/inference (fixed-time)", fontsize=font_size)
+    pie_cf_fw_cur.set_ylabel(f"g, CO$_2$/inference (fixed-work)", fontsize=font_size)
 
     plt.tight_layout()
     plt.show()
@@ -1540,5 +1548,5 @@ if __name__ == "__main__":
         # ds-cnn: 6.25e+4 ns; mobilenet: 4.6ns; resnet8: 4.6ns; autoencoder: 6.25e+4ns; Average: 3.1252e+4 ns
         # Inference period requirement:
         # ds-cnn: 1 s; mobilenet: 1.3 s; resnet8: 1.3 s; autoencoder: 10 s; Average: 3.4 s
-        plot_carbon_footprint_across_years_in_literature(data=data, period=1e+6)  # unit: ns
+        plot_carbon_footprint_across_years_in_literature(data=data, period=2886752.69, op_per_task=986_315_636)  # unit: ns  (period set for tinyml benchmarks)
         # plot_carbon_footprint_in_literature(data=data, period=4e+3)  # unit: ns  # TODO: not complete
