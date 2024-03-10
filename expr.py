@@ -130,15 +130,7 @@ def plot_m_factor_across_techs():
     plt.tight_layout()
     plt.show()
 
-def plot_carbon_footprint_in_literature(data, period=4e+6):
-    # This function is to plot carbon footprint in literature in recent years
-    # There are 3 figures:
-    # fig1: topsw vs. topsmm2
-    # fig2: cf (fixed-time) vs. cf (fixed-work)
-    # fig3: cf breakdown (fixed-time) vs. cf breakdown (fixed-work)
-    pass
-
-def plot_carbon_footprint_across_years_in_literature(data, period=4e+3, op_per_task=1):
+def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1):
     # This function is to plot carbon footprint in literature across different years, for sram-based in-memory computing accelerators.
     # x axis: years
     # there are in total 7 subplots
@@ -155,6 +147,36 @@ def plot_carbon_footprint_across_years_in_literature(data, period=4e+3, op_per_t
     # order:
     # doi, year, IMC type, tech(nm), input precision, topsw (peak-macro), tops (peak-macro), topsmm2 (peak-macro), imc_size
     # all metrics are normalized to 8b precision
+
+    ## Papers
+    data = np.array([
+            #           DOI                               Year    IMC  Tech Pres topsw(peak) tops(peak)  topsmm2 (peak)     #ops/cycle (peak)
+            ["10.1109/ISSCC42613.2021.9365766",                 2021, "DIMC", 22, 8, 24.7,  0.917,       0.917/0.202,    64*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731762",                 2022, "DIMC", 28, 8, 30.8,  1.35,        1.43,           12*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731754",                 2022, "DIMC", 5,  8, 63,    2.95/4,      55,             8*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731645",                 2022, "DIMC", 28, 8, 12.5,  1.48,        0.221,          24*8*1024/8/8],
+            ["10.1109/JSSC.2021.3061508",                       2021, "DIMC", 65, 8, 2.06*4,0.006*4,     0.006*4/0.2272, 2*8*1024/8/8],
+            ["10.1109/VLSITechnologyandCir46769.2022.9830438",  2022, "DIMC", 12, 8, 30.3,  0.336,       41.6/4,         1*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731545",                 2022, "DIMC", 28, 8, 27.38, 0.0055,      0.0055/0.03,    4*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731659",                 2022, "DIMC", 28, 8, 1108/64,9.175/64, 9.175/64/0.033,   2*8*1024/8/8],
+            ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 23.8,  0.182,       0.364,          128*8*1024/8/8],  # Weijie's design
+            ["10.1109/ISSCC42613.2021.9365788",                 2021, "AIMC", 16, 8, 30.25, 2.95,        0.118,          589*8*1024/8/8],
+            ["10.1109/ESSCIRC59616.2023.10268725",              2023, "DIMC", 28, 8, 22.4,  1.46*0.0159, 1.46,           2*8*1024/8/8],
+            ["10.1109/ISSCC42615.2023.10067360",                2023, "DIMC", 28, 8, 2.52,  3.33,        0.85,           144*8*1024/8/8],
+            ["10.1109/ISSCC19947.2020.9062985",                 2020, "AIMC", 7,  8, 321/4, 0.455/4,     0.455/4/0.0032, 0.5*8*1024/8/8],
+            ["10.1109/CICC51472.2021.9431575",                  2021, "AIMC", 22, 8, 1050/16,23.5/16,    12.1/16,        64*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121308",                 2023, "DIMC", 28, 8, 711/2/8,1.152/16,   1.152/16/(0.636*0.148), 1.152*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121243",                 2023, "AIMC", 65, 8, 1.4,   1.104/64,    1.104/64/7,     16*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121221",                 2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318, 1.25,        32*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121213",                 2023, "AIMC", 65, 8, 95.4*(9/64), 0.8136*(9/64), 0.8136*(9/64)/0.26, 13.5*8*1024/8/8],
+            ["10.1109/JSSC.2020.3005754",                       2020, "AIMC", 55, 8, 0.6,   0.00514,     0.00514/(2.34*2.54), 0.5*8*1024/8/8],
+            ["10.23919/VLSICircuits52068.2021.9492444",         2021, "AIMC", 28, 8, 5796/64, 6.144/64,  6.144/64/0.51,  36.8*8*1024/8/8],
+            ["https://ieeexplore.ieee.org/abstract/document/9508673", 2021, "DIMC", 28, 8, 588/64, 4.9/64, 4.9/64/20.9,  432*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731657",                 2022, "AIMC", 28, 8, 45.7/2*3/8, 0.97/2*3/8, 0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8],
+            ["10.1109/TCSI.2023.3244338",                       2023, "AIMC", 28, 8, 16.1/4,   0.0128/4,  0.0128/4/(0.22*0.26), 2*8*1024/8/8],
+            ["10.1109/TCSI.2023.3241385",                       2023, "AIMC", 28, 8, 942.9/4/8, 59.584/4/8*0.0385, 59.584/4/8, 2*8*1024/8/8],
+        ])
+
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
     markers = ["o", "^"]
@@ -1218,6 +1240,19 @@ if __name__ == "__main__":
     # So, you can enable pickle_exist = True, to skip the zigzag-imc call and read inputs from the pkl file.
     # If simulation is required, set pickle_exist = False.
     #########################################
+    ## Experiment 1: carbon for papers in literature
+    # Step 1: extract m factor (carbon/area) for different tech nodes. Data comes from ACT paper above.
+    # plot_m_factor_across_techs()
+    # Step 2: calculate activation period, #mac/inference for tinyml benchmarks
+    # ds-cnn (keyword spotting): 16 kHz (6.25e+4 ns) sampling rate, 2_656_768 macs/inference
+    # mobilenet (visual weak words): 0.75 FPS (1.3s/inference), 7_489_644 macs/inference
+    # resnet8 (imagenet): 25 FPS, 12_501_632 macs/inference
+    # autoencoder (anomaly detection): 16 KHz (6.25e+4 ns) sampling rate, 264_192 macs/inference
+    # geo-mean: 346.41 Hz (2886752.69 ns/cycle), 986315636 macs/inference
+    # Step 3: plot carbon cost in literature
+    plot_carbon_footprint_across_years_in_literature(period=2886752.69,  # unit: ns
+                                                     op_per_task=986_315_636 * 2)  # unit: ops/inference
+    #########################################
     ## parameter setting
     # workload: peak & ae from MLPerf Tiny
     # variables: cols_nbs => [32, 64, .., 1024]
@@ -1469,6 +1504,7 @@ if __name__ == "__main__":
             pickle.dump(df, fp)
         print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
     else:
+        pass
         ## load df from pickle
         # with open("expr_res.pkl", "rb") as fp:
         #     df = pickle.load(fp)
@@ -1505,48 +1541,3 @@ if __name__ == "__main__":
         ## plot_curve_on_varied_sram below is for plotting cost breakdown vs. different sram size, under a fixed imc size and workload
         # plot_curve_on_varied_sram(i_df=df, imc_types=imc_types, workload="geo", imc_dim=imc_dim)
         # breakpoint()
-
-        #######################
-        ## Plot m trend
-        # plot_m_factor_across_techs()
-        ## Plot carbon cost in literature
-        data = np.array([
-            #           DOI                               Year    IMC  Tech Pres topsw(peak) tops(peak)  topsmm2 (peak)     #ops/cycle (peak)
-            ["10.1109/ISSCC42613.2021.9365766",                 2021, "DIMC", 22, 8, 24.7,  0.917,       0.917/0.202,    64*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731762",                 2022, "DIMC", 28, 8, 30.8,  1.35,        1.43,           12*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731754",                 2022, "DIMC", 5,  8, 63,    2.95/4,      55,             8*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731645",                 2022, "DIMC", 28, 8, 12.5,  1.48,        0.221,          24*8*1024/8/8],
-            ["10.1109/JSSC.2021.3061508",                       2021, "DIMC", 65, 8, 2.06*4,0.006*4,     0.006*4/0.2272, 2*8*1024/8/8],
-            ["10.1109/VLSITechnologyandCir46769.2022.9830438",  2022, "DIMC", 12, 8, 30.3,  0.336,       41.6/4,         1*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731545",                 2022, "DIMC", 28, 8, 27.38, 0.0055,      0.0055/0.03,    4*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731659",                 2022, "DIMC", 28, 8, 1108/64,9.175/64, 9.175/64/0.033,   2*8*1024/8/8],
-            ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 23.8,  0.182,       0.364,          128*8*1024/8/8],  # Weijie's design
-            ["10.1109/ISSCC42613.2021.9365788",                 2021, "AIMC", 16, 8, 30.25, 2.95,        0.118,          589*8*1024/8/8],
-            ["10.1109/ESSCIRC59616.2023.10268725",              2023, "DIMC", 28, 8, 22.4,  1.46*0.0159, 1.46,           2*8*1024/8/8],
-            ["10.1109/ISSCC42615.2023.10067360",                2023, "DIMC", 28, 8, 2.52,  3.33,        0.85,           144*8*1024/8/8],
-            ["10.1109/ISSCC19947.2020.9062985",                 2020, "AIMC", 7,  8, 321/4, 0.455/4,     0.455/4/0.0032, 0.5*8*1024/8/8],
-            ["10.1109/CICC51472.2021.9431575",                  2021, "AIMC", 22, 8, 1050/16,23.5/16,    12.1/16,        64*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121308",                 2023, "DIMC", 28, 8, 711/2/8,1.152/16,   1.152/16/(0.636*0.148), 1.152*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121243",                 2023, "AIMC", 65, 8, 1.4,   1.104/64,    1.104/64/7,     16*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121221",                 2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318, 1.25,        32*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121213",                 2023, "AIMC", 65, 8, 95.4*(9/64), 0.8136*(9/64), 0.8136*(9/64)/0.26, 13.5*8*1024/8/8],
-            ["10.1109/JSSC.2020.3005754",                       2020, "AIMC", 55, 8, 0.6,   0.00514,     0.00514/(2.34*2.54), 0.5*8*1024/8/8],
-            ["10.23919/VLSICircuits52068.2021.9492444",         2021, "AIMC", 28, 8, 5796/64, 6.144/64,  6.144/64/0.51,  36.8*8*1024/8/8],
-            ["https://ieeexplore.ieee.org/abstract/document/9508673", 2021, "DIMC", 28, 8, 588/64, 4.9/64, 4.9/64/20.9,  432*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731657",                 2022, "AIMC", 28, 8, 45.7/2*3/8, 0.97/2*3/8, 0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8],
-            ["10.1109/TCSI.2023.3244338",                       2023, "AIMC", 28, 8, 16.1/4,   0.0128/4,  0.0128/4/(0.22*0.26), 2*8*1024/8/8],
-            ["10.1109/TCSI.2023.3241385",                       2023, "AIMC", 28, 8, 942.9/4/8, 59.584/4/8*0.0385, 59.584/4/8, 2*8*1024/8/8],
-        ])
-        # calc period for tinyml workloads
-
-        # ds-cnn (keyword spotting): 16 kHz (6.25e+4 ns), 1s video
-        # mobilenet (visual weak words): 216 MHz (4.6ns), 1.3s/inference is required in the paper
-        # resnet8 (iamgenet): no latency info in the dataset paper. Set to the same with mobilenet.
-        # autoencoder (anomaly detection): 16 KHz (6.25e+4 ns), 10s video
-        # In summary:
-        # Clock speed requirement:
-        # ds-cnn: 6.25e+4 ns; mobilenet: 4.6ns; resnet8: 4.6ns; autoencoder: 6.25e+4ns; Average: 3.1252e+4 ns
-        # Inference period requirement:
-        # ds-cnn: 1 s; mobilenet: 1.3 s; resnet8: 1.3 s; autoencoder: 10 s; Average: 3.4 s
-        plot_carbon_footprint_across_years_in_literature(data=data, period=2886752.69, op_per_task=986_315_636)  # unit: ns  (period set for tinyml benchmarks)
-        # plot_carbon_footprint_in_literature(data=data, period=4e+3)  # unit: ns  # TODO: not complete
