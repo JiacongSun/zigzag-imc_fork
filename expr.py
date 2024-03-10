@@ -1540,5 +1540,5 @@ if __name__ == "__main__":
         # ds-cnn: 6.25e+4 ns; mobilenet: 4.6ns; resnet8: 4.6ns; autoencoder: 6.25e+4ns; Average: 3.1252e+4 ns
         # Inference period requirement:
         # ds-cnn: 1 s; mobilenet: 1.3 s; resnet8: 1.3 s; autoencoder: 10 s; Average: 3.4 s
-        plot_carbon_footprint_across_years_in_literature(data=data, period=3.4e+9)  # unit: ns
-        # plot_carbon_footprint_in_literature(data=data, period=4e+3)  # unit: ns
+        plot_carbon_footprint_across_years_in_literature(data=data, period=1e+6)  # unit: ns
+        # plot_carbon_footprint_in_literature(data=data, period=4e+3)  # unit: ns  # TODO: not complete
