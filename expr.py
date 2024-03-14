@@ -46,7 +46,7 @@ def drawPieMarker(xs, ys, ratios, sizes, colors, ax=None):
         # x, y = generate_array_square_shape(previous, this, 10)
         xy = np.column_stack([x, y])
         previous = this
-        markers.append({'marker':xy, 's':np.abs(xy).max()**2*np.array(sizes), 'facecolor':color, 'edgecolor': 'white'})
+        markers.append({'marker':xy, 's':np.abs(xy).max()**2*np.array(sizes), 'facecolor':color, 'edgecolor': 'black'})
 
     # scatter each of the pie pieces to create pies
     for marker in markers:
@@ -93,7 +93,149 @@ def plot_m_factor_across_techs():
     plt.tight_layout()
     plt.show()
 
-def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1):
+def plot_carbon_footprint(data, period=4e+3, op_per_task=1):
+    # This function is to plot carbon footprint in literature.
+    # x axis: carbon (fixed-work), y axis: carbon (fixed-time).
+    # Two figures will be plotted, where the 1st figure will show pie breakdown of carbon (fixed-time) and the 2nd
+    # figure will show pie breakdown of carbon (fixed-work).
+    # @para data: paper data collection
+    # @para period: the average activation period per task (unit: ns)
+    # @para op_per_task: the number of ops per inference (used to calculate the carbon per inference)
+    colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
+              u'#17becf']
+    markers = ["o", "^"]
+    font_size = 12
+
+    fig_rows_nbs = 1
+    fig_cols_nbs = 2
+    fig, axs = plt.subplots(nrows=fig_rows_nbs, ncols=fig_cols_nbs, figsize=(10, 6))
+    pie_cf_ft_cur = axs[0]  # CF/op pie (fixed-time)
+    pie_cf_fw_cur = axs[1]  # CF/op pie (fixed-time)
+
+    # filter out points on 55, 65nm, since carbon cost cannot be calculated on these techs, due to data limitation
+    new_data = []
+    techs = data[:, 3].astype(int).tolist()
+    for i in range(len(techs)):
+        if techs[i] in [55, 65]:
+            continue
+        else:
+            point = data[i, :].tolist()
+            new_data.append(point)
+    data = np.array(new_data)
+
+    years = np.unique(data[:, 1]).astype(int).tolist()
+    imcs = ["AIMC", "DIMC"]
+    for i in range(len(imcs)):
+        for year_idx in range(len(years)):
+            # filter result
+            res = []
+            year_options = data[:, 1].astype(int).tolist()
+            imc_options = data[:, 2].astype(str).tolist()
+            for opi in range(len(year_options)):
+                if year_options[opi] == years[year_idx] and imc_options[opi] == imcs[i]:
+                    res.append(data[opi, :])
+            if len(res) == 0:
+                continue
+            res = np.array(res)
+
+            # calc carbon cost
+            topsws = res[:, 5].astype(float).tolist()
+            topss = res[:, 6].astype(float).tolist()
+            topsmm2s = res[:, 7].astype(float).tolist()
+            paralls = res[:, 8].astype(float).tolist()  # ops/cycle
+            techs = res[:, 3].astype(int).tolist()
+            m_factors = {28: 8.71,  # g, CO2/mm2. Relevant to Technology nodes.
+                         20: 9.71,
+                         14: 9.86,
+                         10: 10.94,
+                         12: 10.4,
+                         16: 9.812,
+                         22: 9.46,
+                         7: 11.58,
+                         5: 15.53,
+                         3: 16.03}
+            # calc cf (fixed-time)
+            cf_fts = []
+            cf_fws = []
+            pie_cf_fts = []
+            pie_cf_fws = []
+            chip_yield = 0.95  # yield
+            lifetime = 3  # year
+            # period = 4e+6  # 4us
+            k1 = 301 / (3.6E+18)  # g, CO2/pJ
+            for idx in range(len(topsws)):
+                topsw = topsws[idx]
+                tops = topss[idx]
+                topsmm2 = topsmm2s[idx]
+                tech = techs[idx]
+                operational_carbon = k1 / topsw  # g, CO2/op
+                # Convert unit to g, CO2/task
+                operational_carbon *= op_per_task  # g, CO2/task
+
+                m = m_factors[tech]
+                k2 = m / chip_yield / lifetime / (365 * 24 * 60 * 60E+12)  # g, CO2/mm2/ps
+                parallel = paralls[idx]
+                embodied_carbon_ft = k2 / topsmm2  # g, CO2/op
+                embodied_carbon_fw = k2 * (period * 1000) * tops / topsmm2 / parallel  # period: unit: ns -> ps
+                # Convert unit to g, CO2/task
+                embodied_carbon_ft *= op_per_task
+                embodied_carbon_fw *= op_per_task
+
+                cf_ft = operational_carbon + embodied_carbon_ft  # unit: g, carbon/task
+                cf_fw = operational_carbon + embodied_carbon_fw  # unit: g, carbon/task
+                cf_fts.append(cf_ft)
+                cf_fws.append(cf_fw)
+                pie_cf_fts.append([operational_carbon / cf_ft, 1 - operational_carbon / cf_ft])
+                pie_cf_fws.append([operational_carbon / cf_fw, 1 - operational_carbon / cf_fw])
+            cf_fts = np.array(cf_fts)
+            cf_fws = np.array(cf_fws)
+
+            # plot pie cf (fixed-time)
+            pie_size = 200
+            pie_colors = colors[1:3]
+            for x, y, ratio in zip(cf_fws, cf_fts, pie_cf_fts):
+                drawPieMarker(xs=[x],
+                              ys=[y],
+                              ratios=ratio,
+                              sizes=[pie_size],
+                              colors=pie_colors,
+                              ax=pie_cf_ft_cur)
+            pie_cf_ft_cur.set_xscale("log")
+            pie_cf_ft_cur.set_yscale("log")
+            for x, y, tech in zip(cf_fws, cf_fts, res[:, 3].astype(int).tolist()):
+                pie_cf_ft_cur.text(x, 1.1*y, f"{tech} nm", ha="center", fontsize=font_size)
+
+            # plot pie cf (fixed-work)
+            pie_size = 200
+            for x, y, ratio in zip(cf_fws, cf_fts, pie_cf_fws):
+                drawPieMarker(xs=[x],
+                              ys=[y],
+                              ratios=ratio,
+                              sizes=[pie_size],
+                              colors=pie_colors,
+                              ax=pie_cf_fw_cur)
+            pie_cf_fw_cur.set_xscale("log")
+            pie_cf_fw_cur.set_yscale("log")
+            for x, y, tech in zip(cf_fws, cf_fts, res[:, 3].astype(int).tolist()):
+                pie_cf_fw_cur.text(x, 1.1*y, f"{tech} nm", ha="center", fontsize=font_size)
+
+    # configuration
+    for i in range(0, fig_rows_nbs):
+        for j in range(0, fig_cols_nbs):
+            axs[j].set_xlabel(f"g, CO$_2$/inference (fixed-work)", fontsize=font_size+5)
+            axs[j].set_ylabel(f"g, CO$_2$/inference (fixed-time)", fontsize=font_size+5)
+            axs[j].set_ylim([10**-11, 10**-9])
+            axs[j].set_xlim([10 ** -6, 2*10 ** -3])
+            # axs[i][j].legend(loc="upper left")
+
+    # legend description
+    # green: operational carbon footprint
+    # orange: embodied carbon footprint
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_carbon_footprint_across_years_in_literature(data, period=4e+3, op_per_task=1):
     # This function is to plot carbon footprint in literature across different years, for sram-based in-memory computing accelerators.
     # x axis: years
     # there are in total 7 subplots
@@ -105,40 +247,12 @@ def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1)
     # fig6: cf breakdown (fixed-time) vs. years
     # fig7: cf breakdown (fixed-work) vs. years
     # Marker: o: AIMC, square: DIMC.
+    # @para data: paper data collection
     # @para period: the average activation period per task (unit: ns)
     # @para op_per_task: the number of ops per inference (used to calculate the carbon per inference)
     # order:
     # doi, year, IMC type, tech(nm), input precision, topsw (peak-macro), tops (peak-macro), topsmm2 (peak-macro), imc_size
     # all metrics are normalized to 8b precision
-
-    ## Papers
-    data = np.array([
-            #           DOI                               Year    IMC  Tech Pres topsw(peak) tops(peak)  topsmm2 (peak)     #ops/cycle (peak)
-            ["10.1109/ISSCC42613.2021.9365766",                 2021, "DIMC", 22, 8, 24.7,  0.917,       0.917/0.202,    64*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731762",                 2022, "DIMC", 28, 8, 30.8,  1.35,        1.43,           12*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731754",                 2022, "DIMC", 5,  8, 63,    2.95/4,      55,             8*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731645",                 2022, "DIMC", 28, 8, 12.5,  1.48,        0.221,          24*8*1024/8/8],
-            ["10.1109/JSSC.2021.3061508",                       2021, "DIMC", 65, 8, 2.06*4,0.006*4,     0.006*4/0.2272, 2*8*1024/8/8],
-            ["10.1109/VLSITechnologyandCir46769.2022.9830438",  2022, "DIMC", 12, 8, 30.3,  0.336,       41.6/4,         1*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731545",                 2022, "DIMC", 28, 8, 27.38, 0.0055,      0.0055/0.03,    4*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731659",                 2022, "DIMC", 28, 8, 1108/64,9.175/64, 9.175/64/0.033,   2*8*1024/8/8],
-            ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 23.8,  0.182,       0.364,          128*8*1024/8/8],  # Weijie's design
-            ["10.1109/ISSCC42613.2021.9365788",                 2021, "AIMC", 16, 8, 30.25, 2.95,        0.118,          589*8*1024/8/8],
-            ["10.1109/ESSCIRC59616.2023.10268725",              2023, "DIMC", 28, 8, 22.4,  1.46*0.0159, 1.46,           2*8*1024/8/8],
-            ["10.1109/ISSCC42615.2023.10067360",                2023, "DIMC", 28, 8, 2.52,  3.33,        0.85,           144*8*1024/8/8],
-            ["10.1109/ISSCC19947.2020.9062985",                 2020, "AIMC", 7,  8, 321/4, 0.455/4,     0.455/4/0.0032, 0.5*8*1024/8/8],
-            ["10.1109/CICC51472.2021.9431575",                  2021, "AIMC", 22, 8, 1050/16,23.5/16,    12.1/16,        64*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121308",                 2023, "DIMC", 28, 8, 711/2/8,1.152/16,   1.152/16/(0.636*0.148), 1.152*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121243",                 2023, "AIMC", 65, 8, 1.4,   1.104/64,    1.104/64/7,     16*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121221",                 2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318, 1.25,        32*8*1024/8/8],
-            ["10.1109/CICC57935.2023.10121213",                 2023, "AIMC", 65, 8, 95.4*(9/64), 0.8136*(9/64), 0.8136*(9/64)/0.26, 13.5*8*1024/8/8],
-            ["10.1109/JSSC.2020.3005754",                       2020, "AIMC", 55, 8, 0.6,   0.00514,     0.00514/(2.34*2.54), 0.5*8*1024/8/8],
-            ["10.23919/VLSICircuits52068.2021.9492444",         2021, "AIMC", 28, 8, 5796/64, 6.144/64,  6.144/64/0.51,  36.8*8*1024/8/8],
-            ["https://ieeexplore.ieee.org/abstract/document/9508673", 2021, "DIMC", 28, 8, 588/64, 4.9/64, 4.9/64/20.9,  432*8*1024/8/8],
-            ["10.1109/ISSCC42614.2022.9731657",                 2022, "AIMC", 28, 8, 45.7/2*3/8, 0.97/2*3/8, 0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8],
-            ["10.1109/TCSI.2023.3244338",                       2023, "AIMC", 28, 8, 16.1/4,   0.0128/4,  0.0128/4/(0.22*0.26), 2*8*1024/8/8],
-            ["10.1109/TCSI.2023.3241385",                       2023, "AIMC", 28, 8, 942.9/4/8, 59.584/4/8*0.0385, 59.584/4/8, 2*8*1024/8/8],
-        ])
 
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
@@ -168,18 +282,17 @@ def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1)
     data = np.array(new_data)
     # data=data[(data[:,3] != 55) & (data[:,3] != 65)]  # this line suddenly does not work for numpy, not sure why.
 
-    # plot topsw
     years = np.unique(data[:,1]).astype(int).tolist()
     imcs = ["AIMC", "DIMC"]
     markersize=[55, 40]  # AIMC marker size and DIMC marker size
     for i in range(len(imcs)):
-        for y in range(len(years)):
+        for year in range(len(years)):
             # filter result
             res = []
             year_options = data[:,1].astype(int).tolist()
             imc_options = data[:,2].astype(str).tolist()
             for opi in range(len(year_options)):
-                if year_options[opi] == years[y] and imc_options[opi] == imcs[i]:
+                if year_options[opi] == years[year] and imc_options[opi] == imcs[i]:
                     res.append(data[opi,:])
             if len(res) == 0:
                 continue
@@ -187,6 +300,7 @@ def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1)
 
             # res = data[(data[:,1] == years[y]) & (data[:,2] == imcs[i])]  # this line suddenly does not work for numpy, not sure why.
 
+            # plot topsw
             cur_year = [years[y] for j in range(len(res))]
             topsw_cur.scatter(cur_year, res[:, 5].astype(float), marker=markers[i],
                               color=colors[i], edgecolors="black", s=markersize[i])
@@ -209,7 +323,7 @@ def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1)
             for x, y, tech in zip(cur_year, res[:, 7].astype(float).tolist(), res[:, 3].astype(int).tolist()):
                 topsmm2_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
 
-            # plot cf (fixed-time)
+            # calc carbon cost
             topsws = res[:,5].astype(float).tolist()
             topss = res[:,6].astype(float).tolist()
             topsmm2s = res[:,7].astype(float).tolist()
@@ -260,6 +374,8 @@ def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1)
                 pie_cf_fws.append([operational_carbon/cf_fw, 1-operational_carbon/cf_fw])
             cf_fts = np.array(cf_fts)
             cf_fws = np.array(cf_fws)
+
+            # plot cf (fixed-time)
             cf_ft_cur.scatter(cur_year, cf_fts, marker=markers[i],
                              color=colors[i], edgecolors="black", s=markersize[i])
             cf_ft_cur.set_yscale("log")
@@ -1974,9 +2090,43 @@ def experiment_1_literature_trend():
     # autoencoder (anomaly detection): 1 inference/second, 264_192 macs/inference
     # geo-mean: 3.7 Hz, 10535996 macs/inference
 
+    ## Papers
+    data = np.array([
+            #           DOI                               Year    IMC  Tech Pres topsw(peak) tops(peak)  topsmm2 (peak)     #ops/cycle (peak)
+            ["10.1109/ISSCC42613.2021.9365766",                 2021, "DIMC", 22, 8, 24.7,  0.917,       0.917/0.202,    64*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731762",                 2022, "DIMC", 28, 8, 30.8,  1.35,        1.43,           12*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731754",                 2022, "DIMC", 5,  8, 63,    2.95/4,      55,             8*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731645",                 2022, "DIMC", 28, 8, 12.5,  1.48,        0.221,          24*8*1024/8/8],
+            ["10.1109/JSSC.2021.3061508",                       2021, "DIMC", 65, 8, 2.06*4,0.006*4,     0.006*4/0.2272, 2*8*1024/8/8],
+            ["10.1109/VLSITechnologyandCir46769.2022.9830438",  2022, "DIMC", 12, 8, 30.3,  0.336,       41.6/4,         1*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731545",                 2022, "DIMC", 28, 8, 27.38, 0.0055,      0.0055/0.03,    4*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731659",                 2022, "DIMC", 28, 8, 1108/64,9.175/64, 9.175/64/0.033,   2*8*1024/8/8],
+            ["10.1109/ESSCIRC59616.2023.10268774",              2023, "DIMC", 16, 8, 23.8,  0.182,       0.364,          128*8*1024/8/8],  # Weijie's design
+            ["10.1109/ISSCC42613.2021.9365788",                 2021, "AIMC", 16, 8, 30.25, 2.95,        0.118,          589*8*1024/8/8],
+            ["10.1109/ESSCIRC59616.2023.10268725",              2023, "DIMC", 28, 8, 22.4,  1.46*0.0159, 1.46,           2*8*1024/8/8],
+            ["10.1109/ISSCC42615.2023.10067360",                2023, "DIMC", 28, 8, 2.52,  3.33,        0.85,           144*8*1024/8/8],
+            ["10.1109/ISSCC19947.2020.9062985",                 2020, "AIMC", 7,  8, 321/4, 0.455/4,     0.455/4/0.0032, 0.5*8*1024/8/8],
+            ["10.1109/CICC51472.2021.9431575",                  2021, "AIMC", 22, 8, 1050/16,23.5/16,    12.1/16,        64*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121308",                 2023, "DIMC", 28, 8, 711/2/8,1.152/16,   1.152/16/(0.636*0.148), 1.152*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121243",                 2023, "AIMC", 65, 8, 1.4,   1.104/64,    1.104/64/7,     16*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121221",                 2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318, 1.25,        32*8*1024/8/8],
+            ["10.1109/CICC57935.2023.10121213",                 2023, "AIMC", 65, 8, 95.4*(9/64), 0.8136*(9/64), 0.8136*(9/64)/0.26, 13.5*8*1024/8/8],
+            ["10.1109/JSSC.2020.3005754",                       2020, "AIMC", 55, 8, 0.6,   0.00514,     0.00514/(2.34*2.54), 0.5*8*1024/8/8],
+            ["10.23919/VLSICircuits52068.2021.9492444",         2021, "AIMC", 28, 8, 5796/64, 6.144/64,  6.144/64/0.51,  36.8*8*1024/8/8],
+            ["https://ieeexplore.ieee.org/abstract/document/9508673", 2021, "DIMC", 28, 8, 588/64, 4.9/64, 4.9/64/20.9,  432*8*1024/8/8],
+            ["10.1109/ISSCC42614.2022.9731657",                 2022, "AIMC", 28, 8, 45.7/2*3/8, 0.97/2*3/8, 0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8],
+            ["10.1109/TCSI.2023.3244338",                       2023, "AIMC", 28, 8, 16.1/4,   0.0128/4,  0.0128/4/(0.22*0.26), 2*8*1024/8/8],
+            ["10.1109/TCSI.2023.3241385",                       2023, "AIMC", 28, 8, 942.9/4/8, 59.584/4/8*0.0385, 59.584/4/8, 2*8*1024/8/8],
+        ])
+
     ## Step 3: plot carbon cost in literature
-    plot_carbon_footprint_across_years_in_literature(period=10**9/3.7,  # unit: ns
-                                                     op_per_task=10535996 * 2)  # unit: ops/inference
+    # plot_carbon_footprint_across_years_in_literature(data=data,
+    #                                                  period=10**9/3.7,  # unit: ns
+    #                                                  op_per_task=10535996 * 2)  # unit: ops/inference
+    plot_carbon_footprint(data=data,
+                          period=10 ** 9 / 3.7,  # unit: ns
+                          op_per_task=10535996 * 2)  # unit: ops/inference
+    breakpoint()
 
 if __name__ == "__main__":
     #########################################
@@ -1990,7 +2140,7 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    # experiment_1_literature_trend()
+    experiment_1_literature_trend()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -2006,7 +2156,7 @@ if __name__ == "__main__":
     sram_sizes = [256 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}   # exclude batch and relu
-    pickle_exist = False  # read output directly if the output is saved in the last run
+    pickle_exist = True  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
         #########################################
