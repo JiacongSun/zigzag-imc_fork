@@ -103,7 +103,7 @@ def plot_carbon_footprint(data, period=4e+3, op_per_task=1):
     # @para op_per_task: the number of ops per inference (used to calculate the carbon per inference)
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
-    markers = ["o", "^"]
+    markers = ["s", "o", "^", "p"]
     font_size = 12
 
     fig_rows_nbs = 1
@@ -256,7 +256,7 @@ def plot_carbon_footprint_across_years_in_literature(data, period=4e+3, op_per_t
 
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
-    markers = ["o", "^"]
+    markers = ["s", "o", "^", "p"]
     font_size = 15
 
     fig_rows_nbs = 2
@@ -435,7 +435,7 @@ def plot_curve_on_varied_sram(i_df, acc_types, workload="geo", imc_dim=128):
     # for both AIMC and DIMC, under a fixed workload and imc size.
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
-    markers = ["o", "^"]
+    markers = ["s", "o", "^", "p"]
     width = 0.35
     font_size = 15
     df = i_df[(i_df.workload == workload) & (i_df.dim == imc_dim)]
@@ -563,7 +563,7 @@ def plot_bar_on_varied_sram(i_df, acc_types, workload, imc_dim=128):
         x_pos = np.arange(len(labels))
         # Plot the bars
         # Plot en bd
-        en_bd = dff.en  # series: nJ
+        en_bd = dff.en  # series: pJ
         base = [0 for x in range(0, len(labels))]
         i = 0
         for key in en_bd.iloc[0].keys():
@@ -721,7 +721,7 @@ def plot_curve(i_df, acc_types, workload, sram_size=256*1024):
     # a fixed workload and sram size.
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
               u'#17becf']
-    markers = ["s", "o", "^"]
+    markers = ["s", "o", "^", "p"]
     width = 0.35
     font_size = 15
     df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
@@ -783,6 +783,133 @@ def plot_curve(i_df, acc_types, workload, sram_size=256*1024):
     plt.tight_layout()
     plt.show()
 
+def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, breakdown=True):
+    # This function is to plot performance for pdigital_os, pdigital_ws, aimc and dimc, under fixed sram size.
+
+    assert workload != "peak", "Plotting for peak is not supported so far."
+
+    colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+              u'#bcbd22', u'#17becf']
+    markers = ["s", "o", "^", "p"]
+    width = 0.15
+    font_size = 15
+    df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
+    d1_size = df.dim//8
+    df["imc"] = d1_size.astype(str) + f"$\\times$" + df.dim.astype(str)
+
+    fig_rows_nbs = 2
+    fig_cols_nbs = 3
+    fig, axs = plt.subplots(nrows=fig_rows_nbs, ncols=fig_cols_nbs, figsize=(10, 8))
+    energy_bar = axs[0][0]  # energy (pJ)/inference
+    latency_bar = axs[0][1]  # latency (cycles)/inference
+    tclk_bar = axs[1][0]  # tclk (ns)
+    area_bar = axs[1][1]  # area (mm2)/inference
+    time_bar = axs[0][2]  # latency (ns)/inference
+
+    for ii_a, acc_type in enumerate(acc_types):
+        if ii_a == 0:
+            ii_pos = -3
+        elif ii_a == 1:
+            ii_pos = -1
+        elif ii_a == 2:
+            ii_pos = 1
+        else:
+            ii_pos = 3
+
+        dff = df[df.acc_type == acc_type]
+        labels = dff.imc.to_numpy()  # x label
+        # Create positions for the bars on the x-axis
+        x_pos = np.arange(len(labels))
+
+        # Plot the bars
+        if breakdown:
+            assert workload != "geo", "geo does not have cost breakdown."
+            # Plot energy
+            base = [0 for x in range(0, len(labels))]
+            val = np.array([x[0][0].MAC_energy for x in dff.cme])
+            energy_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=acc_type, bottom=base, color=colors[ii_a],
+                      edgecolor="black")
+            base = base + val
+            val = np.array([x[0][0].mem_energy for x in dff.cme])
+            energy_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=None, bottom=base, color="white",
+                           edgecolor="black")
+
+            # Plot tclk
+            t_tclk = dff.t_tclk  # ns
+            tclk_bar.bar(x_pos + width / 2 * ii_pos, t_tclk, width, label=acc_type, color=colors[ii_a],
+                         edgecolor="black")
+
+            # Plot latency
+            base = [0 for x in range(0, len(labels))]
+            val = np.array([x[0][0].ideal_temporal_cycle for x in dff.cme])
+            latency_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=acc_type, bottom=base, color=colors[ii_a],
+                           edgecolor="black")
+            base = base + val
+            latency_total0 = np.array([x[0][0].latency_total0 for x in dff.cme])
+            val = latency_total0 - val  # stall cycles
+            latency_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=None, bottom=base, color="white",
+                            edgecolor="black")
+            # Plot area
+            t_area = dff.t_area.to_numpy()  # series: mm2
+            mem_area = np.array([x["mem_area"] for x in df[df.acc_type=="DIMC"].area])
+            pe_area = t_area - mem_area
+            base = [0 for x in range(0, len(labels))]
+            val = pe_area
+            area_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=acc_type, bottom=base, color=colors[ii_a],
+                            edgecolor="black")
+            base = base + val
+            val = mem_area
+            area_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=None, bottom=base, color="white",
+                            edgecolor="black")
+            # area_bar.set_yscale("log")
+        else:
+            # Plot energy
+            t_en = dff.t_en  # series: pJ
+            energy_bar.bar(x_pos + width / 2 * ii_pos, t_en, width, label=acc_type, color=colors[ii_a],
+                      edgecolor="black")
+
+            # Plot tclk
+            t_tclk = dff.t_tclk  # ns
+            tclk_bar.bar(x_pos + width / 2 * ii_pos, t_tclk, width, label=acc_type, color=colors[ii_a],
+                           edgecolor="black")
+
+            # Plot latency
+            t_lat = dff.t_lat  # total latency (unit: cycle counts)
+            # t_lat *= t_tclk  # unit: ns/inference
+            latency_bar.bar(x_pos + width / 2 * ii_pos, t_lat, width, label=acc_type, color=colors[ii_a],
+                         edgecolor="black")
+            latency_bar.set_yscale("log")
+
+            # Plot area
+            t_area = dff.t_area  # series: mm2
+            area_bar.bar(x_pos + width / 2 * ii_pos, t_area, width, label=acc_type, color=colors[ii_a],
+                           edgecolor="black")
+            area_bar.set_yscale("log")
+
+        # Plot inference time
+        t_lat = dff.t_lat  # total latency (unit: cycle counts)
+        t_lat *= t_tclk  # unit: ns/inference
+        time_bar.bar(x_pos + width / 2 * ii_pos, t_lat, width, label=acc_type, color=colors[ii_a],
+                        edgecolor="black")
+        time_bar.set_yscale("log")
+
+    # configuration
+    for i in range(0, fig_rows_nbs):
+        for j in range(0, fig_cols_nbs):
+            axs[i][j].set_xticks(x_pos, labels, rotation=45)
+            axs[0][j].legend(loc="upper right")
+            axs[1][j].legend(loc="upper left")
+            axs[i][j].grid(which="both")
+            axs[i][j].set_axisbelow(True)
+    energy_bar.set_ylabel(f"Energy [pJ/inference] ({workload})", fontsize=font_size)
+    latency_bar.set_ylabel(f"Latency [cycles/inference] ({workload})", fontsize=font_size)
+    tclk_bar.set_ylabel(f"Tclk [ns] ({workload})", fontsize=font_size)
+    area_bar.set_ylabel(f"Area [mm$^2$] ({workload})", fontsize=font_size)
+    time_bar.set_ylabel(f"Inference time [ns] ({workload})", fontsize=font_size)
+
+    plt.tight_layout()
+    plt.show()
+
 def plot_carbon_curve(i_df, acc_types, workload, sram_size=256*1024, period=1):
     # This function is to plot carbon cost breakdown (in curve) for pdigital, aimc and dimc, under fixed workload and fixed sram size.
     # The output figure consists of 2 subplots (x-axis: area):
@@ -791,7 +918,7 @@ def plot_carbon_curve(i_df, acc_types, workload, sram_size=256*1024, period=1):
     # Within all subplots: from left to right bar: pdigital, AIMC, DIMC.
     colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
               u'#bcbd22', u'#17becf']
-    markers = ["s", "o", "^"]
+    markers = ["s", "o", "^", "p"]
     width = 0.35
     font_size = 15
     df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
@@ -957,7 +1084,7 @@ def plot_bar(i_df, acc_types, workload, sram_size=256*1024):
         x_pos = np.arange(len(labels))
         # Plot the bars
         # Plot en bd
-        en_bd = dff.en  # series: nJ
+        en_bd = dff.en  # series: pJ
         base = [0 for x in range(0, len(labels))]
         i = 0
         for key in en_bd.iloc[0].keys():
@@ -1916,8 +2043,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             tclk_total = dat["outputs"]["clock"]["tclk (ns)"]  # float: ns
                             # breakdown
                             en_bd = {
-                                "array": dat["outputs"]["energy"]["operational_energy"],
-                                "mem": dat["outputs"]["energy"]["memory_energy"],
+                                "array": dat["outputs"]["energy"]["operational_energy"],  # pJ
+                                "mem": dat["outputs"]["energy"]["memory_energy"],  # pJ
                             }
                             lat_bd = dat["outputs"]["latency"]["computation_breakdown"]
                             area_bd = dat["outputs"]["area (mm^2)"]["total_area_breakdown:"]
@@ -2140,7 +2267,7 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    experiment_1_literature_trend()
+    # experiment_1_literature_trend()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -2164,7 +2291,6 @@ if __name__ == "__main__":
         zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
                                              Dimensions=Dimensions, periods=periods)
     else:
-        pass
         ## Step 1: load df from pickle
         with open("expr_res.pkl", "rb") as fp:
             df = pickle.load(fp)
@@ -2175,7 +2301,7 @@ if __name__ == "__main__":
         ## Visualization (Experiment playground)
         #######################
         ## Experiment: sweeping imc size, fixing sram size
-        workload = "resnet8"
+        workload = "geo"
         sram_size = 256*1024
         df = df[(df.workload == workload) & (df.sram_size == sram_size)]
         assert workload in workloads, f"Legal workload: {workloads}"
@@ -2183,8 +2309,10 @@ if __name__ == "__main__":
         assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
+        ## plot performance
+        plot_performance_bar(i_df=df, acc_types=acc_types, workload=workload, sram_size=sram_size, breakdown=False)
         ## plot curve for different carbon components
-        plot_carbon_curve(i_df=df, acc_types=acc_types, workload=workload, sram_size=sram_size, period=periods[workload])
+        # plot_carbon_curve(i_df=df, acc_types=acc_types, workload=workload, sram_size=sram_size, period=periods[workload])
         ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size
         # plot_bar(i_df=df, acc_types=acc_types, workload=workload, sram_size=sram_size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
