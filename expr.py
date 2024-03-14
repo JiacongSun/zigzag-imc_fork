@@ -314,7 +314,7 @@ def plot_carbon_footprint_across_years_in_literature(period=4e+3, op_per_task=1)
     plt.tight_layout()
     plt.show()
 
-def plot_curve_on_varied_sram(i_df, imc_types, workload="geo", imc_dim=128):
+def plot_curve_on_varied_sram(i_df, acc_types, workload="geo", imc_dim=128):
     # This function is to plot topsw, tops, topsmm2, carbon footprint vs. different sram size in curve,
     # for both AIMC and DIMC, under a fixed workload and imc size.
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
@@ -334,8 +334,8 @@ def plot_curve_on_varied_sram(i_df, imc_types, workload="geo", imc_dim=128):
     cf_ft_cur = axs[1, 0]  # CF/inference
     cf_fw_cur = axs[1, 1]  # CF/inference
     mem_area_ratio_bar = axs[1, 2]
-    for ii_a, a in enumerate(imc_types):
-        dff = df[df.imc_type == a]
+    for ii_a, a in enumerate(acc_types):
+        dff = df[df.acc_type == a]
         labels = dff.sram_size.to_numpy()  # x label
         labels = labels // 1024  # convert B -> KB
         # Create positions for the bars on the x-axis
@@ -366,7 +366,7 @@ def plot_curve_on_varied_sram(i_df, imc_types, workload="geo", imc_dim=128):
 
         # Plot sram-to-imc area ratio
         if workload == "geo":  # as there is no area breakdown for geo, we will fetch one from other cases.
-            dff = i_df[(i_df.workload == "mobilenet") & (i_df.dim == imc_dim) & (i_df.imc_type == a)]
+            dff = i_df[(i_df.workload == "mobilenet") & (i_df.dim == imc_dim) & (i_df.acc_type == a)]
         area = dff.area
         sram_area = []
         imc_area = []
@@ -402,7 +402,7 @@ def plot_curve_on_varied_sram(i_df, imc_types, workload="geo", imc_dim=128):
     plt.tight_layout()
     plt.show()
 
-def plot_bar_on_varied_sram(i_df, imc_types, workload, imc_dim=128):
+def plot_bar_on_varied_sram(i_df, acc_types, workload, imc_dim=128):
     # This function is to plot cost breakdown vs. different sram size (in bar) for both aimc and dimc,
     # under fixed workload and fixed imc size.
     # @para imc_dim: imc row number and column number (row number = column number)
@@ -434,13 +434,13 @@ def plot_bar_on_varied_sram(i_df, imc_types, workload, imc_dim=128):
     cf_fw_bar = axs[1, 1]  # CF/inference (macro-only g, CO2/op, if workload == peak)
     mem_area_ratio_bar = axs[1, 2]
 
-    for ii_a, a in enumerate(imc_types):
+    for ii_a, a in enumerate(acc_types):
         if ii_a == 0:
             ii_pos = -1
         else:
             ii_pos = 1
 
-        dff = df[df.imc_type == a]
+        dff = df[df.acc_type == a]
         labels = dff.sram_size.to_numpy()  # x label
         labels = labels // 1024  # convert B -> KB
         # Create positions for the bars on the x-axis
@@ -600,7 +600,7 @@ def plot_bar_on_varied_sram(i_df, imc_types, workload, imc_dim=128):
     plt.tight_layout()
     plt.show()
 
-def plot_curve(i_df, imc_types, workload, sram_size=256*1024):
+def plot_curve(i_df, acc_types, workload, sram_size=256*1024):
     # This function is to plot topsw, tops, topsmm2, carbon footprint in curve, for both AIMC and DIMC, under
     # a fixed workload and sram size.
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
@@ -619,8 +619,8 @@ def plot_curve(i_df, imc_types, workload, sram_size=256*1024):
     topsmm2_cur = axs[0, 2]
     cf_ft_cur = axs[1, 0]  # CF/inference
     cf_fw_cur = axs[1, 1]  # CF/inference
-    for ii_a, a in enumerate(imc_types):
-        dff = df[df.imc_type == a]
+    for ii_a, a in enumerate(acc_types):
+        dff = df[df.acc_type == a]
         labels = dff.imc.to_numpy()  # x label
         # Create positions for the bars on the x-axis
         x_pos = np.arange(len(labels))
@@ -667,7 +667,7 @@ def plot_curve(i_df, imc_types, workload, sram_size=256*1024):
     plt.tight_layout()
     plt.show()
 
-def plot_carbon_curve(i_df, imc_types, workload, sram_size=256*1024, period=1):
+def plot_carbon_curve(i_df, acc_types, workload, sram_size=256*1024, period=1):
     # This function is to plot carbon cost breakdown (in curve) for pdigital, aimc and dimc, under fixed workload and fixed sram size.
     # The output figure consists of 2 subplots (x-axis: area):
     # 1th (left): carbon footprint breakdown (fixed-time)
@@ -687,8 +687,8 @@ def plot_carbon_curve(i_df, imc_types, workload, sram_size=256*1024, period=1):
     cf_ft_cur = axs[0][0]  # CF/inference
     cf_fw_cur = axs[0][1]  # CF/inference
 
-    for ii_a, a in enumerate(imc_types):
-        dff = df[df.imc_type == a]
+    for ii_a, a in enumerate(acc_types):
+        dff = df[df.acc_type == a]
         # Create positions for the bars on the x-axis
         x_pos = dff.t_area.to_numpy()
         # Due to cacti, the peripheral mem area for 64x64 imc array is smaller than 32x32 imc array, this looks weird
@@ -800,7 +800,7 @@ def plot_carbon_curve(i_df, imc_types, workload, sram_size=256*1024, period=1):
     plt.show()
 
 
-def plot_bar(i_df, imc_types, workload, sram_size=256*1024):
+def plot_bar(i_df, acc_types, workload, sram_size=256*1024):
     # This function is to plot cost breakdown (in bar) for both aimc and dimc, under fixed workload and fixed sram size.
     # The output figure consists of 4 subplots (x-axis: different imc size):
     # 1st (top-left): energy breakdown
@@ -829,13 +829,13 @@ def plot_bar(i_df, imc_types, workload, sram_size=256*1024):
     cf_ft_bar = axs[1, 0]  # CF/inference (macro-only g, CO2/op, if workload == peak)
     cf_fw_bar = axs[1, 1]  # CF/inference (macro-only g, CO2/op, if workload == peak)
 
-    for ii_a, a in enumerate(imc_types):
+    for ii_a, a in enumerate(acc_types):
         if ii_a == 0:
             ii_pos = -1
         else:
             ii_pos = 1
 
-        dff = df[df.imc_type == a]
+        dff = df[df.acc_type == a]
         labels = dff.imc.to_numpy()  # x label
         # Create positions for the bars on the x-axis
         x_pos = np.arange(len(labels))
@@ -1299,9 +1299,9 @@ def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
     return memory_hierarchy_graph
 
 
-def get_accelerator(imc_type, tech_param, hd_param, dims, sram_size=256*1024):
-    assert imc_type in ["pdigital", "AIMC", "DIMC"], f"imc_type {imc_type} not in [pdigital, AIMC, DIMC]"
-    if imc_type in ["AIMC", "DIMC"]:
+def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024):
+    assert acc_type in ["pdigital", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital, AIMC, DIMC]"
+    if acc_type in ["AIMC", "DIMC"]:
         imc_array = ImcArray(tech_param, hd_param, dims)
         mem_hier = memory_hierarchy_dut(imc_array, sram_size=sram_size)
     else:
@@ -1316,12 +1316,12 @@ def get_accelerator(imc_type, tech_param, hd_param, dims, sram_size=256*1024):
     return accelerator
 
 
-def get_imc_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
+def get_imc_param_setting(acc_type="DIMC", cols=32, rows=32, D3=1):
     ## type: pdigital, DIMC or AIMC
     # cols: int, can divide with 8
     # rows: int
     # D3: int
-    assert imc_type in ["pdigital", "AIMC", "DIMC"], f"imc_type {imc_type} not in [pdigital, AIMC, DIMC]"
+    assert acc_type in ["pdigital", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital, AIMC, DIMC]"
 
     ##################
     ## dimensions
@@ -1332,7 +1332,7 @@ def get_imc_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
         "D3": D3,  # nb_macros
     }  # {"D1": ("K", 4), "D2": ("C", 32),}
 
-    if imc_type == "pdigital":
+    if acc_type == "pdigital":
         tech_param_28nm = {}
         hd_param = {}
         return tech_param_28nm, hd_param, dimensions
@@ -1355,8 +1355,8 @@ def get_imc_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
 
     ##################
     ## hd_param
-    assert imc_type in ["DIMC", "AIMC"], f"imc_type {imc_type} not in range [DIMC, AIMC]"
-    if imc_type == "DIMC":
+    assert acc_type in ["DIMC", "AIMC"], f"acc_type {acc_type} not in range [DIMC, AIMC]"
+    if acc_type == "DIMC":
         imc = "digital"
         in_bits_per_cycle = 1
     else:
@@ -1364,7 +1364,7 @@ def get_imc_param_setting(imc_type="DIMC", cols=32, rows=32, D3=1):
         in_bits_per_cycle = 2
     hd_param = {
         "pe_type": "in_sram_computing",  # for in-memory-computing. Digital core for different values.
-        "imc_type": imc,  # "digital" or "analog"
+        "acc_type": imc,  # "digital" or "analog"
         "input_precision": 8,  # activation precision
         "weight_precision": 8,  # weight precision
         "input_bit_per_cycle": in_bits_per_cycle,  # nb_bits of input/cycle (treated as DAC resolution)
@@ -1514,10 +1514,10 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
 
     return CF_PER_OP_fixed_time, tt_cf_bd_fixed_time, CF_PER_OP_fixed_work, tt_cf_bd_fixed_work, CF_PER_OP_fixed_time_ex_pkg,CF_PER_OP_fixed_work_ex_pkg
 
-def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_sizes: list, Dimensions: list, periods: dict):
+def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
-    # imc_types: aimc, dimc, pdigital
+    # acc_types: aimc, dimc, pdigital
     # sram_sizes: int
     # Dimensions: int
     # periods: float
@@ -1526,13 +1526,13 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
     data_vals = []
     os.system("rm -rf outputs/*")
     for workload in workloads:
-        for imc_type in imc_types:
+        for acc_type in acc_types:
             for sram_size in sram_sizes:
                 for d in Dimensions:
-                    tech_param, hd_param, dims = get_imc_param_setting(imc_type=imc_type, cols=d, rows=d, D3=1)
+                    tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, cols=d, rows=d, D3=1)
                     if workload == "peak":
                         # peak performance assessment below
-                        if imc_type in ["AIMC", "DIMC"]:
+                        if acc_type in ["AIMC", "DIMC"]:
                             imc = ImcArray(tech_param, hd_param, dims)
                             area_bd = imc.area_breakdown  # dict
                             area_total = imc.total_area  # float (mm2)
@@ -1542,7 +1542,7 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                             peak_en_total = sum([v for v in peak_en_bd.values()])  # float (pJ)
                             nb_of_ops = np.prod([x for x in dims.values()]) * hd_param["input_bit_per_cycle"] / hd_param[
                                 "input_precision"] * 2
-                        else:  # imc_type == "pdigital"
+                        else:  # acc_type == "pdigital"
                             parray, multiplier_energy = digital_array(dims)
                             area_total = parray.total_area  # mm2
                             area_bd = {"pe": area_total}
@@ -1559,7 +1559,7 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
 
                         res = {
                             "workload": workload,
-                            "imc_type": imc_type,
+                            "acc_type": acc_type,
                             "sram_size": sram_size,
                             "dim": d,
                             "ops": nb_of_ops,
@@ -1594,10 +1594,10 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                             breakpoint()  # to be extended to other networks
 
                         mapping = "zigzag.inputs.examples.mapping.default_imc"
-                        accelerator = get_accelerator(imc_type, tech_param, hd_param, dims, sram_size)
+                        accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size)
 
                         # Call API
-                        hw_name = imc_type
+                        hw_name = acc_type
                         wl_name = re.split(r"/|\.", workload_dir)[-1]
                         if wl_name == "onnx":
                             wl_name = re.split(r"/|\.", workload_dir)[-2]
@@ -1617,7 +1617,7 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                             dat = json.load(fp)
                         en_total = dat["outputs"]["energy"]["energy_total"]  # float: pJ
                         lat_total = dat["outputs"]["latency"]["computation"]  # float: cycles
-                        if imc_type in ["AIMC", "DIMC"]:
+                        if acc_type in ["AIMC", "DIMC"]:
                             area_total = dat["outputs"]["area (mm^2)"]["total_area"]  # float: mm2
                             tclk_total = dat["outputs"]["clock"]["tclk (ns)"]  # float: ns
                             # breakdown
@@ -1645,7 +1645,7 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                             nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload])
                         res = {
                             "workload": workload,
-                            "imc_type": imc_type,
+                            "acc_type": acc_type,
                             "sram_size": sram_size,
                             "dim": d,
                             "ops": ops_workloads[workload],
@@ -1683,7 +1683,7 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
     #       = 1/chip_yield * 8.71 * area:mm2 * runtime: ns / (9.4608E16) , (g, CO2)
     # => E_SOC = 1/chip_yield * (0.921/E16) * mm2 * ns = 1/chip_yield * (0.921/E13) * nbs_of_ops/(TOP/s/mm2)
     data_vals = []
-    for imc_type in imc_types:
+    for acc_type in acc_types:
         for sram_size in sram_sizes:
             for dim in Dimensions:
                 geo_topsw = 1
@@ -1699,12 +1699,12 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                 for workload in workloads:
                     if workload == "geo":  # skip if it's for geo-mean (will be re-calculated)
                         continue
-                    dff = df[(df.workload == workload) & (df.imc_type == imc_type) & (df.sram_size == sram_size) & (
+                    dff = df[(df.workload == workload) & (df.acc_type == acc_type) & (df.sram_size == sram_size) & (
                                 df.dim == dim)]
                     # re-arrange the stored dict and add metrics
                     new_res = {
                         "workload": dff.workload.to_list()[0],
-                        "imc_type": dff.imc_type.to_list()[0],
+                        "acc_type": dff.acc_type.to_list()[0],
                         "sram_size": dff.sram_size.to_list()[0],
                         "dim": dff.dim.to_list()[0],
                         "ops": dff.ops.to_list()[0],
@@ -1750,7 +1750,7 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                 geo_cf_fw_ex_pkg = geo_cf_fw_ex_pkg ** (1 / len(workloads))
                 geo_res = {
                     "workload": "geo",
-                    "imc_type": imc_type,
+                    "acc_type": acc_type,
                     "sram_size": sram_size,
                     "dim": dim,
                     "ops": geo_ops,
@@ -1823,7 +1823,7 @@ if __name__ == "__main__":
     periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25}  # unit: ns
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
-    imc_types = ["pdigital"]  # pdigital (pure digital), aimc, dimc
+    acc_types = ["pdigital"]  # pdigital (pure digital), aimc, dimc
     # sram_sizes = [32*1024, 64*1024, 128*1024, 256*1024, 512*1024, 1024*1024, 2048*1024]
     sram_sizes = [256 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}
@@ -1833,7 +1833,7 @@ if __name__ == "__main__":
     if pickle_exist == False:
         #########################################
         ## Simulation
-        zigzag_similation_and_result_storage(workloads=workloads, imc_types=imc_types, sram_sizes=sram_sizes,
+        zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
                                              Dimensions=Dimensions, periods=periods)
     else:
         pass
@@ -1856,11 +1856,11 @@ if __name__ == "__main__":
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
         ## plot curve for different carbon components
-        plot_carbon_curve(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size, period=periods[workload])
+        plot_carbon_curve(i_df=df, acc_types=acc_types, workload=workload, sram_size=sram_size, period=periods[workload])
         ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size
-        # plot_bar(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
+        # plot_bar(i_df=df, acc_types=acc_types, workload=workload, sram_size=sram_size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
-        # plot_curve(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
+        # plot_curve(i_df=df, acc_types=acc_types, workload=workload, sram_size=sram_size)
         breakpoint()
 
         #######################
@@ -1873,7 +1873,7 @@ if __name__ == "__main__":
         # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
         #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
         #                            "different to each other."
-        # plot_bar_on_varied_sram(i_df=df, imc_types=imc_types, workload=workload, imc_dim=imc_dim)
+        # plot_bar_on_varied_sram(i_df=df, acc_types=acc_types, workload=workload, imc_dim=imc_dim)
         ## plot_curve_on_varied_sram below is for plotting cost breakdown vs. different sram size, under a fixed imc size and workload
-        # plot_curve_on_varied_sram(i_df=df, imc_types=imc_types, workload="geo", imc_dim=imc_dim)
+        # plot_curve_on_varied_sram(i_df=df, acc_types=acc_types, workload="geo", imc_dim=imc_dim)
         # breakpoint()
