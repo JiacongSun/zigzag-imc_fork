@@ -31,7 +31,7 @@
     "last_opened_file_path": "/users/micas/jsun/sunjc/codes/branch_for_updating_zigzag_imc/zigzag-imc_public_repo_maintainance/zigzag-imc/README.md"
   }
 }]]></component>
-  <component name="RunManager" selected="Python.expr">
+  <component name="RunManager">
     <configuration name="api" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="zigzag-imc_fork" />
       <option name="INTERPRETER_OPTIONS" value="" />

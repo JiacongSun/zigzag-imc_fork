@@ -1027,9 +1027,10 @@ def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*
     # sram_size = 256 * 1024 # unit: byte
     sram_bw = max(imc_array.dimension_sizes[1] * 8 * imc_array.dimension_sizes[2],
                   imc_array.dimension_sizes[0] * 16 * imc_array.dimension_sizes[2])
+
     # The next command can not work for unclear reason
-    # ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, "28", "sram", sram_size, sram_bw, hd_hash=str(hash((sram_size, sram_bw, random.randbytes(8)))))
-    ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, "28", "sram", sram_size, sram_bw)
+    ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, 0.028, "sram", sram_size, sram_bw, hd_hash=str(hash((sram_size, sram_bw, random.randbytes(8)))))
+    # ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, 0.028, "sram", sram_size, sram_bw)
 
     sram_256KB_256_3r_3w = MemoryInstance(
         name="sram_256KB",
@@ -1391,7 +1392,7 @@ def digital_array(dims):
     # Clock freq: 200 MHz
     multiplier_input_precision = [8, 8]
     multiplier_energy = 0.25  # unit: pJ/mac
-    multiplier_area = 0.75*1.29/256/4  # mm2
+    multiplier_area = 0.75*1.29/256/4  # mm2/PE
     multiplier = Multiplier(
         multiplier_input_precision, multiplier_energy, multiplier_area
     )
@@ -1611,7 +1612,6 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                             dump_filename_pattern=f"outputs/{experiment_id}-layer_?.json",
                             pickle_filename=f"outputs/{pkl_name}.pickle",
                         )
-
                         # Read output
                         with open(f"outputs/{experiment_id}-layer_overall_complete.json", "r") as fp:
                             dat = json.load(fp)
@@ -1629,8 +1629,9 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
                             area_bd = dat["outputs"]["area (mm^2)"]["total_area_breakdown:"]
                             tclk_bd = dat["outputs"]["clock"]["tclk_breakdown (ns)"]
                         else:
-                            parray, multiplier_energy = digital_array(dims)
-                            area_total = parray.total_area + np.sum(dat["inputs"]["accelerator"]["cores"]["memory_level_area"])  # mm2
+                            pe_array_area = accelerator.cores[0].operational_array.total_area
+                            mem_area = np.sum(accelerator.cores[0].memory_level_area)  # abnormal value
+                            area_total = pe_array_area + mem_area  # mm2
                             tclk_total = 5  # ns
                             en_bd = {}
                             lat_bd = {}
@@ -1776,8 +1777,8 @@ def zigzag_similation_and_result_storage(workloads: list, imc_types: list, sram_
     df = new_df
 
     # save df to pickle
-    with open("expr_res.pkl", "wb") as fp:
-        pickle.dump(df, fp)
+    # with open("expr_res.pkl", "wb") as fp:
+    #     pickle.dump(df, fp)
     print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
     targ_time = time.time()
     sim_time = round(targ_time-trig_time, 1)
@@ -1811,7 +1812,7 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    experiment_1_literature_trend()
+    # experiment_1_literature_trend()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -1822,12 +1823,12 @@ if __name__ == "__main__":
     periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25}  # unit: ns
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
-    imc_types = ["AIMC", "DIMC"]  # pdigital (pure digital), aimc, dimc
+    imc_types = ["pdigital"]  # pdigital (pure digital), aimc, dimc
     # sram_sizes = [32*1024, 64*1024, 128*1024, 256*1024, 512*1024, 1024*1024, 2048*1024]
     sram_sizes = [256 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}
-    pickle_exist = True  # read output directly if the output is saved in the last run
+    pickle_exist = False  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
         #########################################
