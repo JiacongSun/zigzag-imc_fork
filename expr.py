@@ -19,45 +19,6 @@ from zigzag.classes.hardware.architecture.operational_unit import Multiplier
 from zigzag.classes.hardware.architecture.operational_array import MultiplierArray
 import random
 
-def generate_array_square_shape(previous, this, points=10):
-    # function does not work
-    assert this > previous, "ending angle must be larger than starting angle"
-    regions = [1/8, 3/8, 5/8, 7/8]
-    prev_idx = 0
-    this_idx = 0
-    for i in range(len(regions)):
-        if previous >= 2 * np.pi * regions[i]:
-            prev_idx = i
-        if this >= 2 * np.pi * regions[i]:
-            this_idx = i
-    # generate starting points
-    angles = np.linspace(previous, this, 10).tolist()
-    x_angles = []
-    y_angles = []
-    for ele in angles:
-        if ele <= regions[0]:
-            pt = 0  # points to be aded
-            x_angles.append(pt)
-            y_angles.append(ele)
-        elif regions[0] < ele <= regions[1]:
-            x_angles.append(0)
-            y_angles.append(0.5*np.pi)
-            x_angles.append(ele)
-            y_angles.append(0.5*np.pi)
-        elif regions[1] < ele <= regions[2]:
-            x_angles.append(np.pi)
-            y_angles.append(0.5 * np.pi)
-            x_angles.append(np.pi)
-            y_angles.append(ele)
-        else:
-            x_angles.append(0)
-            y_angles.append(1.5 * np.pi)
-            x_angles.append(ele)
-            y_angles.append(1.5 * np.pi)
-    x = [0] + np.cos(x_angles).tolist() + [0]
-    y = [0] + np.sin(y_angles).tolist() + [0]
-    return x, y
-
 def drawPieMarker(xs, ys, ratios, sizes, colors, ax=None):
     # This function is to plot scatter pie chart.
     # The source is: https://stackoverflow.com/questions/56337732/how-to-plot-scatter-pie-chart-using-matplotlib
@@ -1828,15 +1789,15 @@ def experiment_1_literature_trend():
     # plot_m_factor_across_techs()
 
     ## Step 2 (no function involved): calculate activation period, #mac/inference for tinyml benchmarks
-    # ds-cnn (keyword spotting): 16 kHz (6.25e+4 ns) sampling rate, 2_656_768 macs/inference
+    # ds-cnn (keyword spotting): 10 inference/second, 2_656_768 macs/inference
     # mobilenet (visual weak words): 0.75 FPS (1.3s/inference), 7_489_644 macs/inference
     # resnet8 (imagenet): 25 FPS, 12_501_632 macs/inference
-    # autoencoder (anomaly detection): 16 KHz (6.25e+4 ns) sampling rate, 264_192 macs/inference
-    # geo-mean: 346.41 Hz (2886752.69 ns/cycle), 986315636 macs/inference
+    # autoencoder (anomaly detection): 1 inference/second, 264_192 macs/inference
+    # geo-mean: 3.7 Hz, 10535996 macs/inference
 
     ## Step 3: plot carbon cost in literature
-    plot_carbon_footprint_across_years_in_literature(period=2886752.69,  # unit: ns
-                                                     op_per_task=986_315_636 * 2)  # unit: ops/inference
+    plot_carbon_footprint_across_years_in_literature(period=10**9/3.7,  # unit: ns
+                                                     op_per_task=10535996 * 2)  # unit: ops/inference
 
 if __name__ == "__main__":
     #########################################
@@ -1850,7 +1811,7 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    # experiment_1_literature_trend()
+    experiment_1_literature_trend()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -1858,7 +1819,7 @@ if __name__ == "__main__":
     # variables: cols_nbs => [32, 64, .., 1024]
     # variables: rows_nbs => rows_nbs = cols_nbs
     # variables:
-    periods = {"peak": 1, "ae": 1e+9/48000, "ds_cnn": 1e+9/16000, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25}  # unit: ns
+    periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25}  # unit: ns
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
     imc_types = ["AIMC", "DIMC"]  # pdigital (pure digital), aimc, dimc
@@ -1866,7 +1827,7 @@ if __name__ == "__main__":
     sram_sizes = [256 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}
-    pickle_exist = False  # read output directly if the output is saved in the last run
+    pickle_exist = True  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
         #########################################
@@ -1885,7 +1846,7 @@ if __name__ == "__main__":
         ## Visualization (Experiment playground)
         #######################
         ## Experiment: sweeping imc size, fixing sram size
-        workload = "ds_cnn"
+        workload = "resnet8"
         sram_size = 256*1024
         df = df[(df.workload == workload) & (df.sram_size == sram_size)]
         assert workload in workloads, f"Legal workload: {workloads}"
@@ -1894,9 +1855,9 @@ if __name__ == "__main__":
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
         ## plot curve for different carbon components
-        # plot_carbon_curve(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size, period=periods[workload])
+        plot_carbon_curve(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size, period=periods[workload])
         ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size
-        plot_bar(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
+        # plot_bar(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=df, imc_types=imc_types, workload=workload, sram_size=sram_size)
         breakpoint()
