@@ -971,9 +971,9 @@ def plot_bar(i_df, acc_types, workload, sram_size=256*1024):
     plt.tight_layout()
     plt.show()
 
-def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*1024):
+def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*1024):
     # This function defines the memory hierarchy in the hardware template.
-    # @para imc_array: imc pe array object
+    # @para parray: digital pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
@@ -981,18 +981,18 @@ def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*
 
     """Memory hierarchy variables"""
     """ size=#bit, bw=(read bw, write bw), cost=(read word energy, write work energy) """
-    cell_group = MemoryInstance(
-        name="cell_group",
-        size=8 * 1,
+    reg_W1 = MemoryInstance(
+        name="reg_W1",
+        size=8,
         r_bw=8,
         w_bw=8,
         r_cost=0,
-        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8, # unit: pJ/weight
-        area=0.614 * 6 / 1e6 * 8, # this area is already included in imc_array
-        r_port=1, # no standalone read port
-        w_port=1, # no standalone write port
-        rw_port=0, # 1 port for both reading and writing
-        latency=0, # no extra clock cycle required
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8,  # unit: pJ/access
+        area=0.614 * 6 / 1e6 * 8,  # mm^2
+        r_port=1,  # no standalone read port
+        w_port=1,  # no standalone write port
+        rw_port=0,  # 1 port for both reading and writing
+        latency=1,  # no extra clock cycle required
     )
     reg_I1 = MemoryInstance(
         name="rf_I1",
@@ -1000,8 +1000,8 @@ def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*
         r_bw=8,
         w_bw=8,
         r_cost=0,
-        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8, # pJ/access
-        area=0.614 * 6 / 1e6 * 8, # mm^2
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8,  # pJ/access
+        area=0.614 * 6 / 1e6 * 8,  # mm^2
         r_port=1,
         w_port=1,
         rw_port=0,
@@ -1025,12 +1025,172 @@ def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*
     ##################################### on-chip memory hierarchy building blocks #####################################
 
     # sram_size = 256 * 1024 # unit: byte
-    sram_bw = max(imc_array.dimension_sizes[1] * 8 * imc_array.dimension_sizes[2],
-                  imc_array.dimension_sizes[0] * 16 * imc_array.dimension_sizes[2])
+    sram_bw = max(parray.dimension_sizes[1] * 8 * parray.dimension_sizes[2],
+                  parray.dimension_sizes[0] * 16 * parray.dimension_sizes[2])
 
-    # The next command can not work for unclear reason
     ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, 0.028, "sram", sram_size, sram_bw, hd_hash=str(hash((sram_size, sram_bw, random.randbytes(8)))))
     # ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, 0.028, "sram", sram_size, sram_bw)
+
+    sram_256KB_256_3r_3w = MemoryInstance(
+        name="sram_256KB",
+        size=sram_size * 8,  # byte -> bit
+        r_bw=sram_bw,
+        w_bw=sram_bw,
+        r_cost=sram_r_cost,
+        w_cost=sram_w_cost,
+        area=sram_area,
+        r_port=3,
+        w_port=3,
+        rw_port=0,
+        latency=1,
+        min_r_granularity=sram_bw//16,  # assume there are 16 sub-banks
+        min_w_granularity=sram_bw//16,  # assume there are 16 sub-banks
+    )
+
+    #######################################################################################################################
+
+    # dram_size = 1*1024*1024*1024 # unit: byte
+    dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
+    dram_ac_cost_per_bit = 3.7  # unit: pJ/bit
+    dram_bw = parray.dimension_sizes[0] * 8 * parray.dimension_sizes[2]
+    dram_100MB_32_3r_3w = MemoryInstance(
+        name="dram_1GB",
+        size=dram_size*8, # byte -> bit
+        r_bw=dram_bw,
+        w_bw=dram_bw,
+        r_cost=dram_ac_cost_per_bit*dram_bw,  # pJ/access
+        w_cost=dram_ac_cost_per_bit*dram_bw,  # pJ/access
+        area=0,
+        r_port=3,
+        w_port=3,
+        rw_port=0,
+        latency=1,
+        min_r_granularity=dram_bw // 16,  # assume there are 16 sub-banks
+        min_w_granularity=dram_bw // 16,  # assume there are 16 sub-banks
+    )
+
+    memory_hierarchy_graph = MemoryHierarchy(operational_array=parray)
+
+    """
+    fh: from high = wr_in_by_high 
+    fl: from low = wr_in_by_low 
+    th: to high = rd_out_to_high
+    tl: to low = rd_out_to_low
+    """
+    ## Following part is different from pdigtial_ws
+    memory_hierarchy_graph.add_memory(
+        memory_instance=reg_O1,
+        operands=("O",),
+        port_alloc=(
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_2", "th": "r_port_2"},),
+        served_dimensions=set(),
+    )
+    memory_hierarchy_graph.add_memory(
+        memory_instance=reg_W1,
+        operands=("I2",),
+        port_alloc=({"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},),
+        served_dimensions={(0, 1, 0)},
+    )
+    ## Above part is different from pdigtial_ws
+    memory_hierarchy_graph.add_memory(
+        memory_instance=reg_I1,
+        operands=("I1",),
+        port_alloc=({"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},),
+        served_dimensions={(1, 0, 0)},
+    )
+
+    ##################################### on-chip highest memory hierarchy initialization #####################################
+
+    memory_hierarchy_graph.add_memory(
+        memory_instance=sram_256KB_256_3r_3w,
+        operands=("I1", "O",),
+        port_alloc=(
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
+        ),
+        served_dimensions="all",
+    )
+
+    ####################################################################################################################
+
+    memory_hierarchy_graph.add_memory(
+        memory_instance=dram_100MB_32_3r_3w,
+        operands=("I1", "I2", "O"),
+        port_alloc=(
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+        ),
+        served_dimensions="all",
+    )
+
+    if visualize:
+        from zigzag.visualization.graph.memory_hierarchy import (
+            visualize_memory_hierarchy_graph,
+        )
+
+        visualize_memory_hierarchy_graph(memory_hierarchy_graph)
+    return memory_hierarchy_graph
+
+
+def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024):
+    # This function defines the memory hierarchy in the hardware template.
+    # @para parray: digital pe array object
+    # @para visualize: whether illustrate teh memory hierarchy
+    # @para sram_size: define the on-chip sram size, unit: byte
+    """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
+    cacti_path = "zigzag/classes/cacti/cacti_master"
+
+    """Memory hierarchy variables"""
+    """ size=#bit, bw=(read bw, write bw), cost=(read word energy, write work energy) """
+    reg_W1 = MemoryInstance(
+        name="reg_W1",
+        size=8,
+        r_bw=8,
+        w_bw=8,
+        r_cost=0,
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8,  # unit: pJ/weight
+        area=0.614 * 6 / 1e6 * 8,
+        r_port=1,  # 1 standalone read port
+        w_port=1,  # 1 standalone write port
+        rw_port=0,  # no port for both reading and writing
+        latency=1,  # 1 extra clock cycle required
+    )
+    reg_I1 = MemoryInstance(
+        name="rf_I1",
+        size=8,
+        r_bw=8,
+        w_bw=8,
+        r_cost=0,
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 8,  # pJ/access
+        area=0.614 * 6 / 1e6 * 8,  # mm^2
+        r_port=1,
+        w_port=1,
+        rw_port=0,
+        latency=1,
+    )
+
+    reg_O1 = MemoryInstance(
+        name="rf_O1",
+        size=16,
+        r_bw=16,
+        w_bw=16,
+        r_cost=0,
+        w_cost=0.7 * 3 / 1e3 * (0.9**2) * 16, # pJ/access
+        area=0.614 * 6 / 1e6 * 16, # mm^2
+        r_port=2,
+        w_port=2,
+        rw_port=0,
+        latency=1,
+    )
+
+    ##################################### on-chip memory hierarchy building blocks #####################################
+
+    # sram_size = 256 * 1024 # unit: byte
+    sram_bw = max(parray.dimension_sizes[1] * 8 * parray.dimension_sizes[2],
+                  parray.dimension_sizes[0] * 16 * parray.dimension_sizes[2])
+
+    ac_time, sram_area, sram_r_cost, sram_w_cost = get_cacti_cost(cacti_path, 0.028, "sram", sram_size, sram_bw, hd_hash=str(hash((sram_size, sram_bw, random.randbytes(8)))))
 
     sram_256KB_256_3r_3w = MemoryInstance(
         name="sram_256KB",
@@ -1053,7 +1213,7 @@ def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*
     # dram_size = 1*1024*1024*1024 # unit: byte
     dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
     dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
-    dram_bw = imc_array.dimension_sizes[0] * 8 * imc_array.dimension_sizes[2]
+    dram_bw = parray.dimension_sizes[0] * 8 * parray.dimension_sizes[2]
     dram_100MB_32_3r_3w = MemoryInstance(
         name="dram_1GB",
         size=dram_size*8, # byte -> bit
@@ -1070,7 +1230,7 @@ def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*
         min_w_granularity=dram_bw // 16,  # assume there are 16 sub-banks
     )
 
-    memory_hierarchy_graph = MemoryHierarchy(operational_array=imc_array)
+    memory_hierarchy_graph = MemoryHierarchy(operational_array=parray)
 
     """
     fh: from high = wr_in_by_high 
@@ -1079,7 +1239,7 @@ def memory_hierarchy_dut_for_pdigital(imc_array, visualize=False, sram_size=256*
     tl: to low = rd_out_to_low
     """
     memory_hierarchy_graph.add_memory(
-        memory_instance=cell_group,
+        memory_instance=reg_W1,
         operands=("I2",),
         port_alloc=({"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},),
         served_dimensions=set(),
@@ -1156,12 +1316,12 @@ def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
         r_bw=hd_param["weight_precision"],
         w_bw=hd_param["weight_precision"],
         r_cost=0,
-        w_cost=w_cost_per_weight_writing, # unit: pJ/weight
-        area=0, # this area is already included in imc_array
-        r_port=0, # no standalone read port
-        w_port=0, # no standalone write port
-        rw_port=1, # 1 port for both reading and writing
-        latency=0, # no extra clock cycle required
+        w_cost=w_cost_per_weight_writing,  # unit: pJ/weight
+        area=0,  # this area is already included in imc_array
+        r_port=0,  # no standalone read port
+        w_port=0,  # no standalone write port
+        rw_port=1,  # 1 port for both reading and writing
+        latency=0,  # no extra clock cycle required
     )
     reg_I1 = MemoryInstance(
         name="rf_I1",
@@ -1300,13 +1460,16 @@ def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
 
 
 def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024):
-    assert acc_type in ["pdigital", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital, AIMC, DIMC]"
+    assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
     if acc_type in ["AIMC", "DIMC"]:
         imc_array = ImcArray(tech_param, hd_param, dims)
         mem_hier = memory_hierarchy_dut(imc_array, sram_size=sram_size)
     else:
         parray, multiplier_energy = digital_array(dims)
-        mem_hier = memory_hierarchy_dut_for_pdigital(parray, sram_size=sram_size)
+        if acc_type == "pdigital_ws":
+            mem_hier = memory_hierarchy_dut_for_pdigital_ws(parray, sram_size=sram_size)
+        else:
+            mem_hier = memory_hierarchy_dut_for_pdigital_os(parray, sram_size=sram_size)
         imc_array = parray
 
     core = {Core(1, imc_array, mem_hier)}
@@ -1321,7 +1484,7 @@ def get_imc_param_setting(acc_type="DIMC", cols=32, rows=32, D3=1):
     # cols: int, can divide with 8
     # rows: int
     # D3: int
-    assert acc_type in ["pdigital", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital, AIMC, DIMC]"
+    assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
 
     ##################
     ## dimensions
@@ -1332,7 +1495,7 @@ def get_imc_param_setting(acc_type="DIMC", cols=32, rows=32, D3=1):
         "D3": D3,  # nb_macros
     }  # {"D1": ("K", 4), "D2": ("C", 32),}
 
-    if acc_type == "pdigital":
+    if acc_type in ["pdigital_ws", "pdigital_os"]:
         tech_param_28nm = {}
         hd_param = {}
         return tech_param_28nm, hd_param, dimensions
@@ -1364,7 +1527,7 @@ def get_imc_param_setting(acc_type="DIMC", cols=32, rows=32, D3=1):
         in_bits_per_cycle = 2
     hd_param = {
         "pe_type": "in_sram_computing",  # for in-memory-computing. Digital core for different values.
-        "acc_type": imc,  # "digital" or "analog"
+        "imc_type": imc,  # "digital" or "analog"
         "input_precision": 8,  # activation precision
         "weight_precision": 8,  # weight precision
         "input_bit_per_cycle": in_bits_per_cycle,  # nb_bits of input/cycle (treated as DAC resolution)
@@ -1517,7 +1680,7 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
 def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
-    # acc_types: aimc, dimc, pdigital
+    # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
     # sram_sizes: int
     # Dimensions: int
     # periods: float
@@ -1542,7 +1705,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             peak_en_total = sum([v for v in peak_en_bd.values()])  # float (pJ)
                             nb_of_ops = np.prod([x for x in dims.values()]) * hd_param["input_bit_per_cycle"] / hd_param[
                                 "input_precision"] * 2
-                        else:  # acc_type == "pdigital"
+                        else:  # acc_type == "pdigital_ws" or "pdigital_os"
                             parray, multiplier_energy = digital_array(dims)
                             area_total = parray.total_area  # mm2
                             area_bd = {"pe": area_total}
@@ -1573,10 +1736,10 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             "t_lat": 1,
                             "t_tclk": tclk_total,
                             "t_en": peak_en_total,
-                            "t_cf_ft": cf_total_fixed_time,
-                            "t_cf_fw": cf_total_fixed_work,
-                            "t_cf_ft_ex_pkg": cf_total_fixed_time_ex_pkg,
-                            "t_cf_fw_ex_pkg": cf_total_fixed_work_ex_pkg,
+                            "t_cf_ft": cf_total_fixed_time,  # unit: g, CO2/MAC
+                            "t_cf_fw": cf_total_fixed_work,  # unit: g, CO2/MAC
+                            "t_cf_ft_ex_pkg": cf_total_fixed_time_ex_pkg,  # unit: g, CO2/MAC
+                            "t_cf_fw_ex_pkg": cf_total_fixed_work_ex_pkg,  # unit: g, CO2/MAC
                             "cme": None,
                         }
                         data_vals.append(res)
@@ -1593,7 +1756,22 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         else:
                             breakpoint()  # to be extended to other networks
 
-                        mapping = "zigzag.inputs.examples.mapping.default_imc"
+                        if acc_type == "pdigital_os":
+                            mapping = {
+                                "default": {
+                                    "core_allocation": 1,
+                                    "memory_operand_links": {"O": "O", "W": "I2", "I": "I1"},
+                                    "spatial_mapping_hint": {"D1": ["K"], "D2": ["OX", "OY"]},
+                                }
+                            }
+                        else:
+                            mapping = {
+                                "default": {
+                                    "core_allocation": 1,
+                                    "memory_operand_links": {"O": "O", "W": "I2", "I": "I1"},
+                                    "spatial_mapping_hint": {"D1": ["K", "OX"], "D2": ["C", "FX", "FY"]},
+                                }
+                            }
                         accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size)
 
                         # Call API
@@ -1630,7 +1808,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             tclk_bd = dat["outputs"]["clock"]["tclk_breakdown (ns)"]
                         else:
                             pe_array_area = accelerator.cores[0].operational_array.total_area
-                            mem_area = np.sum(accelerator.cores[0].memory_level_area)  # abnormal value
+                            mem_area = np.sum(accelerator.cores[0].memory_level_area)
                             area_total = pe_array_area + mem_area  # mm2
                             tclk_total = 5  # ns
                             en_bd = {}
@@ -1777,8 +1955,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     df = new_df
 
     # save df to pickle
-    # with open("expr_res.pkl", "wb") as fp:
-    #     pickle.dump(df, fp)
+    with open("expr_res.pkl", "wb") as fp:
+        pickle.dump(df, fp)
     print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
     targ_time = time.time()
     sim_time = round(targ_time-trig_time, 1)
@@ -1823,11 +2001,11 @@ if __name__ == "__main__":
     periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25}  # unit: ns
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
-    acc_types = ["pdigital"]  # pdigital (pure digital), aimc, dimc
+    acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
     # sram_sizes = [32*1024, 64*1024, 128*1024, 256*1024, 512*1024, 1024*1024, 2048*1024]
     sram_sizes = [256 * 1024]
-    # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}
-    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}
+    # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
+    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}   # exclude batch and relu
     pickle_exist = False  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
