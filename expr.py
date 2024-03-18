@@ -794,6 +794,7 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
     # (3) fixed-time, complex task with 10x (default) more complexity than case (1)
     # (4) fixed-work, complex task with 10x (default) complexity than case (2)
     # The output figure consists of 4 subplots (x-axis: area, y-axis: carbon/inference), corresponding to the cases above.
+    # @para sram_size: value [x axis is dim size]; list [x axis is sram size].
 
     def calc_carbon_footprint_for_complex_task(raw_data, acc_type, workload, sram_size, complexity):
         # function to calculate carbon for complex tasks under the fixed-work scenario
@@ -803,7 +804,15 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
             entire_df = raw_data["data"]
             periods = raw_data["periods"]
             period = periods[workload]
-            use_df = entire_df[(entire_df.workload == workload) & (entire_df.sram_size == sram_size) & (
+            try:
+                dim = raw_data["dim"]
+            except KeyError:
+                dim = None
+            if isinstance(sram_size, list) and len(sram_size) > 0:
+                use_df = entire_df[(entire_df.workload == workload) & (entire_df.dim == dim) & (
+                        entire_df.acc_type == acc_type)]
+            else:
+                use_df = entire_df[(entire_df.workload == workload) & (entire_df.sram_size == sram_size) & (
                         entire_df.acc_type == acc_type)]
             # (2) collect original carbon breakdown for the workload
             cf_ft_breakdown = use_df.cf_ft.to_numpy()
@@ -847,7 +856,7 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
               u'#bcbd22', u'#17becf']
     markers = ["s", "o", "^", "p"]
     font_size = 15
-    df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
+    df = i_df[(i_df.workload == workload)]
     if d1_equal_d2:
         dim_d1 = df.dim
     else:
@@ -880,14 +889,29 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
                            linestyle="--")
 
             ## Text dimension sizes on the plot
-            # if ii_a in [0, 1, 2]:
-            #     for x, y, txt in zip(x_pos, cf_ft, dff.imc):
-            #         cf_ft_simple_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
+            if ii_a in [0, 1, 2]:
+                if isinstance(sram_size, list) and len(sram_size) > 0:
+                    attached_text = dff.sram_size.to_numpy()
+                    attached_text = [f"{unit_text//1024}KB" for unit_text in attached_text]
+                else:
+                    attached_text = dff.imc
+                for x, y, txt in zip(x_pos, cf_ft, attached_text):
+                    cf_ft_simple_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
 
             # Plot cf, simple (fixed-work)
             cf_fw = dff.t_cf_fw_ex_pkg.to_numpy()
             cf_fw_simple_cur.plot(x_pos, cf_fw, label=a, color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
                            linestyle="--")
+
+            ## Text dimension sizes on the plot
+            if ii_a in [2]:
+                if isinstance(sram_size, list) and len(sram_size) > 0:
+                    attached_text = dff.sram_size.to_numpy()
+                    attached_text = [f"{unit_text // 1024}KB" for unit_text in attached_text]
+                else:
+                    attached_text = dff.imc
+                for x, y, txt in zip(x_pos, cf_fw, attached_text):
+                    cf_fw_simple_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
 
             # Plot cf, complex (fixed-time)
             cf_ft_complex = cf_ft * complexity
@@ -967,7 +991,7 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
             axs[i][j].set_yscale("log")
             axs[i][j].grid(which="both")
             axs[i][j].set_axisbelow(True)
-            axs[i][j].legend(loc="upper right")
+            axs[i][j].legend(loc="upper left")
     axs[fig_rows_nbs - 1][0].set_xlabel(f"Area (mm$^2$)")
     axs[fig_rows_nbs - 1][1].set_xlabel(f"Area (mm$^2$)")
     axs[1][0].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-time)", fontsize=font_size*1.2)
@@ -980,8 +1004,11 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
     plt.tight_layout()
     plt.show()
 
-def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, d1_equal_d2=False, breakdown=True):
+def plot_performance_bar(i_df, acc_types: list, workload: str, sram_size=256*1024, d1_equal_d2=False, breakdown=True):
     # This function is to plot performance for pdigital_os, pdigital_ws, aimc and dimc, under fixed sram size.
+    # @para sram_size: value [x axis is D1xD2]; list [x axis is sram size]
+    # @para d1_equal_d2: True [D1=D2=dim]; False [D1=dim//8, D2=dim]
+    # @para breakdown: True [show cost breakdown for PE (colored bar) and memories (white bar)]; False [only show total cost]
 
     assert workload != "peak", "Plotting for peak is not supported so far."
 
@@ -990,7 +1017,7 @@ def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, d1_equal
     markers = ["s", "o", "^", "p"]
     width = 0.15
     font_size = 15
-    df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
+    df = i_df[(i_df.workload == workload)]
     if d1_equal_d2:
         dim_d1 = df.dim
     else:
@@ -1003,8 +1030,11 @@ def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, d1_equal
     energy_bar = axs[0][0]  # energy (pJ)/inference
     latency_bar = axs[0][1]  # latency (cycles)/inference
     tclk_bar = axs[1][0]  # tclk (ns)
-    area_bar = axs[1][1]  # area (mm2)/inference
+    area_bar = axs[1][1]  # area (mm2)
     time_bar = axs[0][2]  # latency (ns)/inference
+    log_area_bar = axs[1][2]  # log(area)
+
+
 
     for ii_a, acc_type in enumerate(acc_types):
         if ii_a == 0:
@@ -1017,7 +1047,15 @@ def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, d1_equal
             ii_pos = 3
 
         dff = df[df.acc_type == acc_type]
-        labels = dff.imc.to_numpy()  # x label
+
+        # identify x axis
+        if isinstance(sram_size, list) and len(sram_size) > 1:
+            labels = dff.sram_size.to_numpy()
+            # convert unit to KB
+            labels = labels//1024
+            labels = [f"{size}KB" for size in labels]
+        else:
+            labels = dff.imc.to_numpy()
         # Create positions for the bars on the x-axis
         x_pos = np.arange(len(labels))
 
@@ -1057,11 +1095,15 @@ def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, d1_equal
             val = pe_area
             area_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=acc_type, bottom=base, color=colors[ii_a],
                             edgecolor="black")
+            log_area_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=acc_type, bottom=base, color=colors[ii_a],
+                         edgecolor="black")
             base = base + val
             val = mem_area
             area_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=None, bottom=base, color="white",
                             edgecolor="black")
-            # area_bar.set_yscale("log")
+
+            log_area_bar.bar(x_pos + width / 2 * ii_pos, val, width, label=None, bottom=base, color="white",
+                            edgecolor="black")
         else:
             # Plot energy
             t_en = dff.t_en  # series: pJ
@@ -1084,7 +1126,8 @@ def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, d1_equal
             t_area = dff.t_area  # series: mm2
             area_bar.bar(x_pos + width / 2 * ii_pos, t_area, width, label=acc_type, color=colors[ii_a],
                            edgecolor="black")
-            area_bar.set_yscale("log")
+            log_area_bar.bar(x_pos + width / 2 * ii_pos, t_area, width, label=acc_type, color=colors[ii_a],
+                         edgecolor="black")
 
         # Plot inference time
         t_lat = dff.t_lat  # total latency (unit: cycle counts)
@@ -1106,6 +1149,8 @@ def plot_performance_bar(i_df, acc_types, workload, sram_size=256*1024, d1_equal
     tclk_bar.set_ylabel(f"Tclk [ns] ({workload})", fontsize=font_size)
     area_bar.set_ylabel(f"Area [mm$^2$] ({workload})", fontsize=font_size)
     time_bar.set_ylabel(f"Inference time [ns] ({workload})", fontsize=font_size)
+    log_area_bar.set_ylabel(f"Area [mm$^2$] ({workload})", fontsize=font_size)
+    log_area_bar.set_yscale("log")
 
     plt.tight_layout()
     plt.show()
@@ -1576,12 +1621,11 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_100MB_32_3r_3w,
-        # operands=("I1", "I2", "O"),
-        operands=("I2",),
+        operands=("I1", "I2", "O"),
         port_alloc=(
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1738,12 +1782,11 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_100MB_32_3r_3w,
-        # operands=("I1", "I2", "O"),
-        operands=("I2",),
+        operands=("I1", "I2", "O"),
         port_alloc=(
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1906,12 +1949,11 @@ def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_100MB_32_3r_3w,
-        # operands=("I1", "I2", "O"),
-        operands=("I2",),
+        operands=("I1", "I2", "O"),
         port_alloc=(
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1956,8 +1998,8 @@ def get_imc_param_setting(acc_type="DIMC", cols=32, rows=32, D3=1):
     ## dimensions
     assert cols // 8 == cols / 8, f"cols {cols} cannot divide with 8."
     dimensions = {
-        "D1": cols // 8,  # wordline dimension
-        # "D1": cols,  # wordline dimension
+        # "D1": cols // 8,  # wordline dimension
+        "D1": cols,  # wordline dimension
         "D2": rows,  # bitline dimension
         "D3": D3,  # nb_macros
     }  # {"D1": ("K", 4), "D2": ("C", 32),}
@@ -2503,8 +2545,8 @@ if __name__ == "__main__":
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    # sram_sizes = [32*1024, 64*1024, 128*1024, 256*1024, 512*1024, 1024*1024, 2048*1024]
-    sram_sizes = [256 * 1024]
+    sram_sizes = [64*1024, 128*1024, 256*1024, 512*1024, 1024*1024]
+    # sram_sizes = [256 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}   # exclude batch and relu
     pickle_exist = True  # read output directly if the output is saved in the last run
@@ -2516,7 +2558,7 @@ if __name__ == "__main__":
                                              Dimensions=Dimensions, periods=periods)
     else:
         ## Step 1: load df from pickle
-        with open("expr_res_bigger_d1.pkl", "rb") as fp:
+        with open("expr_res.pkl", "rb") as fp:
             df = pickle.load(fp)
         workloads.append("geo")  # append geo so that plotting for geo is also supported
 
@@ -2524,15 +2566,20 @@ if __name__ == "__main__":
         #########################################
         ## Visualization (Experiment playground)
         #######################
-        ## Experiment: sweeping imc size, fixing sram size
-        workload = "resnet8"
-        sram_size = 256*1024
-        i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
-        assert workload in workloads, f"Legal workload: {workloads}"
-        assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
-        assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
-                                   "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
-                                   "different to each other."
+        ## Experiment 1: sweeping imc size, fixing sram size
+        # The idea is:
+        # (1) there will be an optimal area point regarding carbon footprint;
+        # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
+        #       for fixed-time scenarios.
+        # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
+        # workload = "resnet8"
+        # sram_size = 256*1024
+        # i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
+        # assert workload in workloads, f"Legal workload: {workloads}"
+        # assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
+        # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
+        #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
+        #                            "different to each other."
         ## (1) check if performance value makes sense (x axis: dimension size) (note: workload != geo)
         # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
         ## (2) check performance together with carbon (x axis: dimension size)
@@ -2541,28 +2588,46 @@ if __name__ == "__main__":
         ## (3) check carbon breakdown of different carbon components for different area (x axis: area) (note: workload != geo)
         # plot_carbon_breakdown_in_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
         ## (4) plot carbon comparison across 4 scenarios
+        # raw_data = {
+        #     "data": df,
+        #     "workloads": workloads,
+        #     "periods": periods,
+        # }
+        # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=False, d1_equal_d2=True)
+
+        ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size (obsolete, to be removed)
+        # plot_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size)
+        # breakpoint()
+
+        #######################
+        ## Experiment 2: sweeping sram size, fixing imc size
+        # The idea is:
+        # (1) the optimum for energy and carbon is not the same, where big on-chip memory is preferred from the energy
+        #       perspective but small on-chip memory is preferred from the carbon perspective.
+        workload = "mobilenet"
+        imc_dim = 128
+        assert imc_dim in Dimensions, f"Legal dimensions: {Dimensions}"
+        assert workload in workloads, f"Legal workload: {workloads}"
+        assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
+                                   "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
+                                   "different to each other."
+        i_df = df[(df.workload == workload) & (df.dim == imc_dim)]
+
+        sram_size = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]
+        ## (1) check if performance value makes sense (x axis: dimension size) (note: workload != geo)
+        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
+        ## (4) plot carbon comparison across 4 scenarios
         raw_data = {
             "data": df,
             "workloads": workloads,
             "periods": periods,
+            "dim": imc_dim,
         }
         plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
 
-        ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size (obsolete, to be removed)
-        # plot_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size)
-        breakpoint()
 
-        #######################
-        ## Experiment: sweeping sram size, fixing imc size
         ## plot_bar_on_varied_sram below is for plotting cost breakdown vs. different sram size, under a fixed imc size and workload
-        # workload = "ae"
-        # imc_dim = 128
-        # assert imc_dim in Dimensions, f"Legal dimensions: {Dimensions}"
-        # assert workload in workloads, f"Legal workload: {workloads}"
-        # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
-        #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
-        #                            "different to each other."
-        # plot_bar_on_varied_sram(i_df=df, acc_types=acc_types, workload=workload, imc_dim=imc_dim)
+        # plot_bar_on_varied_sram(i_df=df, acc_types=acc_types, workload=workload, imc_dim=imc_dim) (obsolete, to be removed)
         ## plot_curve_on_varied_sram below is for plotting cost breakdown vs. different sram size, under a fixed imc size and workload
         # plot_curve_on_varied_sram(i_df=df, acc_types=acc_types, workload="geo", imc_dim=imc_dim)
-        # breakpoint()
+        breakpoint()
