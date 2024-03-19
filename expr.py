@@ -2521,6 +2521,10 @@ def experiment_1_literature_trend():
                           op_per_task=10535996 * 2)  # unit: ops/inference
     breakpoint()
 
+def save_as_pickle(df, filename):
+    with open(filename, "wb") as fp:
+        pickle.dump(df, fp)
+
 if __name__ == "__main__":
     #########################################
     ## TOP DESCRIPTION
@@ -2558,7 +2562,7 @@ if __name__ == "__main__":
                                              Dimensions=Dimensions, periods=periods)
     else:
         ## Step 1: load df from pickle
-        with open("expr_res.pkl", "rb") as fp:
+        with open("result.pkl", "rb") as fp:
             df = pickle.load(fp)
         workloads.append("geo")  # append geo so that plotting for geo is also supported
 
@@ -2572,16 +2576,16 @@ if __name__ == "__main__":
         # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
-        # workload = "resnet8"
-        # sram_size = 256*1024
-        # i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
-        # assert workload in workloads, f"Legal workload: {workloads}"
-        # assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
-        # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
-        #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
-        #                            "different to each other."
+        workload = "resnet8"
+        sram_size = 256*1024
+        i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
+        assert workload in workloads, f"Legal workload: {workloads}"
+        assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
+        assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
+                                   "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
+                                   "different to each other."
         ## (1) check if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
+        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
         ## (2) check performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
@@ -2597,37 +2601,37 @@ if __name__ == "__main__":
 
         ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size (obsolete, to be removed)
         # plot_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size)
-        # breakpoint()
+        breakpoint()
 
         #######################
         ## Experiment 2: sweeping sram size, fixing imc size
         # The idea is:
         # (1) the optimum for energy and carbon is not the same, where big on-chip memory is preferred from the energy
         #       perspective but small on-chip memory is preferred from the carbon perspective.
-        workload = "mobilenet"
-        imc_dim = 128
-        assert imc_dim in Dimensions, f"Legal dimensions: {Dimensions}"
-        assert workload in workloads, f"Legal workload: {workloads}"
-        assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
-                                   "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
-                                   "different to each other."
-        i_df = df[(df.workload == workload) & (df.dim == imc_dim)]
-
-        sram_size = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]
+        # workload = "mobilenet"
+        # imc_dim = 128
+        # assert imc_dim in Dimensions, f"Legal dimensions: {Dimensions}"
+        # assert workload in workloads, f"Legal workload: {workloads}"
+        # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
+        #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
+        #                            "different to each other."
+        # i_df = df[(df.workload == workload) & (df.dim == imc_dim)]
+        #
+        # sram_size = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]
         ## (1) check if performance value makes sense (x axis: dimension size) (note: workload != geo)
         # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
         ## (4) plot carbon comparison across 4 scenarios
-        raw_data = {
-            "data": df,
-            "workloads": workloads,
-            "periods": periods,
-            "dim": imc_dim,
-        }
-        plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
+        # raw_data = {
+        #     "data": df,
+        #     "workloads": workloads,
+        #     "periods": periods,
+        #     "dim": imc_dim,
+        # }
+        # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
 
-
+        ## Obsolete below, to be removed.
         ## plot_bar_on_varied_sram below is for plotting cost breakdown vs. different sram size, under a fixed imc size and workload
         # plot_bar_on_varied_sram(i_df=df, acc_types=acc_types, workload=workload, imc_dim=imc_dim) (obsolete, to be removed)
         ## plot_curve_on_varied_sram below is for plotting cost breakdown vs. different sram size, under a fixed imc size and workload
         # plot_curve_on_varied_sram(i_df=df, acc_types=acc_types, workload="geo", imc_dim=imc_dim)
-        breakpoint()
+        # breakpoint()

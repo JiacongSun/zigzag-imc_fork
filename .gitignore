@@ -157,4 +157,4 @@ zigzag/classes/cacti/cacti_master/self_gen/
 
 # debug file
 debug.py
-*.pkl
+expr_res.pkl
