@@ -93,7 +93,72 @@ def plot_m_factor_across_techs():
     plt.tight_layout()
     plt.show()
 
-def plot_carbon_footprint(data, period=4e+3, op_per_task=1):
+def plot_performance_in_literature(data, period=4e+3, op_per_task=1):
+    # This function is to plot carbon footprint in literature across different years, for sram-based in-memory computing accelerators.
+    # x axis: topsmm2
+    # there are in total 1 subplots
+    # fig1: topsw vs. topsmm2
+    # Marker: o: AIMC, square: DIMC.
+    # @para data: paper data collection
+    # @para period: the average activation period per task (unit: ns)
+    # @para op_per_task: the number of ops per inference (used to calculate the carbon per inference)
+    # order in data (dataframe):
+    # doi, year, IMC type, tech(nm), input precision, topsw (peak-macro), tops (peak-macro), topsmm2 (peak-macro), imc_size
+    # all metrics are normalized to 8b precision
+
+    colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
+              u'#17becf']
+    markers = ["s", "o", "^", "p"]
+    font_size = 15
+
+    # filter out points on 55, 65nm, since carbon cost cannot be calculated on these techs, due to data limitation
+    new_data = []
+    techs = data[:,3].astype(int).tolist()
+    for i in range(len(techs)):
+        if techs[i] in [55, 65]:
+            continue
+        else:
+            point = data[i,:].tolist()
+            new_data.append(point)
+    data = np.array(new_data)
+    # data=data[(data[:,3] != 55) & (data[:,3] != 65)]  # this line suddenly does not work for numpy, not sure why.
+
+    years = np.unique(data[:,1]).astype(int).tolist()
+    imcs = ["AIMC", "DIMC"]
+    markersize=[55, 40]  # AIMC marker size and DIMC marker size
+    for i in range(len(imcs)):
+        for year in range(len(years)):
+            # filter result
+            res = []
+            year_options = data[:,1].astype(int).tolist()
+            imc_options = data[:,2].astype(str).tolist()
+            for opi in range(len(year_options)):
+                if year_options[opi] == years[year] and imc_options[opi] == imcs[i]:
+                    res.append(data[opi,:])
+            if len(res) == 0:
+                continue
+            res = np.array(res)
+
+            # res = data[(data[:,1] == years[y]) & (data[:,2] == imcs[i])]  # this line suddenly does not work for numpy, not sure why.
+
+            # plot topsw
+            plt.scatter(res[:, 7].astype(float), res[:, 5].astype(float), marker=markers[i],
+                              color=colors[i], edgecolors="black", s=markersize[i])
+            # topsw_cur.set_yscale("log")
+            # for x, y, tech in zip(cur_year, res[:, 5].astype(float).tolist(), res[:, 3].astype(int).tolist()):
+            #     topsw_cur.text(x-0.1, y, f"{tech}", ha="right", fontsize=font_size - 7)
+
+    # configuration
+    plt.ylabel(f"TOP/s/W", fontsize=font_size)
+    plt.xlabel(f"TOP/s/mm$^2$", fontsize=font_size)
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.grid("both")
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
     # This function is to plot carbon footprint in literature.
     # x axis: carbon (fixed-work), y axis: carbon (fixed-time).
     # Two figures will be plotted, where the 1st figure will show pie breakdown of carbon (fixed-time) and the 2nd
@@ -144,16 +209,18 @@ def plot_carbon_footprint(data, period=4e+3, op_per_task=1):
             topsmm2s = res[:, 7].astype(float).tolist()
             paralls = res[:, 8].astype(float).tolist()  # ops/cycle
             techs = res[:, 3].astype(int).tolist()
-            m_factors = {28: 8.71,  # g, CO2/mm2. Relevant to Technology nodes.
-                         20: 9.71,
-                         14: 9.86,
-                         10: 10.94,
-                         12: 10.4,
-                         16: 9.812,
-                         22: 9.46,
-                         7: 11.58,
-                         5: 15.53,
-                         3: 16.03}
+            ci_fabs = {  # tech | CI_fab [g, CO2/mm2]
+                28: 8.709,
+                22: 9.446,
+                20: 9.712,
+                16: 9.812,
+                14: 9.862,
+                12: 10.408,
+                10: 10.955,
+                7: 11.575,
+                5: 15.528,
+                3: 16.028,
+            }
             # calc cf (fixed-time)
             cf_fts = []
             cf_fws = []
@@ -172,14 +239,14 @@ def plot_carbon_footprint(data, period=4e+3, op_per_task=1):
                 # Convert unit to g, CO2/task
                 operational_carbon *= op_per_task  # g, CO2/task
 
-                m = m_factors[tech]
-                k2 = m / chip_yield / lifetime / (365 * 24 * 60 * 60E+12)  # g, CO2/mm2/ps
+                ci_fab = ci_fabs[tech]
+                k2 = ci_fab / chip_yield / (lifetime * 365 * 24 * 60 * 60E+12)  # g, CO2/mm2/ps
                 parallel = paralls[idx]
-                embodied_carbon_ft = k2 / topsmm2  # g, CO2/op
-                embodied_carbon_fw = k2 * (period * 1000) * tops / topsmm2 / parallel  # period: unit: ns -> ps
-                # Convert unit to g, CO2/task
-                embodied_carbon_ft *= op_per_task
-                embodied_carbon_fw *= op_per_task
+                embodied_carbon_ft_per_op = k2 / topsmm2  # g, CO2/op
+                embodied_carbon_fw_per_op = k2 * (period * 1000) * tops / topsmm2 / parallel  # period: unit: ns -> ps
+                # Convert unit to g, CO2/inference
+                embodied_carbon_ft = embodied_carbon_ft_per_op * op_per_task
+                embodied_carbon_fw = embodied_carbon_fw_per_op * op_per_task
 
                 cf_ft = operational_carbon + embodied_carbon_ft  # unit: g, carbon/task
                 cf_fw = operational_carbon + embodied_carbon_fw  # unit: g, carbon/task
@@ -226,6 +293,8 @@ def plot_carbon_footprint(data, period=4e+3, op_per_task=1):
             axs[j].set_ylabel(f"g, CO$_2$/inference (fixed-time)", fontsize=font_size+5)
             axs[j].set_ylim([10**-11, 10**-9])
             axs[j].set_xlim([10 ** -6, 2*10 ** -3])
+            axs[j].grid("both")
+            axs[j].set_axisbelow(True)
             # axs[i][j].legend(loc="upper left")
 
     # legend description
@@ -2516,10 +2585,9 @@ def experiment_1_literature_trend():
     # plot_carbon_footprint_across_years_in_literature(data=data,
     #                                                  period=10**9/3.7,  # unit: ns
     #                                                  op_per_task=10535996 * 2)  # unit: ops/inference
-    plot_carbon_footprint(data=data,
+    plot_carbon_footprint_in_literature(data=data,
                           period=10 ** 9 / 3.7,  # unit: ns
                           op_per_task=10535996 * 2)  # unit: ops/inference
-    breakpoint()
 
 def save_as_pickle(df, filename):
     with open(filename, "wb") as fp:
@@ -2537,7 +2605,8 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    # experiment_1_literature_trend()
+    experiment_1_literature_trend()
+    breakpoint()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -2562,7 +2631,7 @@ if __name__ == "__main__":
                                              Dimensions=Dimensions, periods=periods)
     else:
         ## Step 1: load df from pickle
-        with open("result.pkl", "rb") as fp:
+        with open("expr_res.pkl", "rb") as fp:
             df = pickle.load(fp)
         workloads.append("geo")  # append geo so that plotting for geo is also supported
 
