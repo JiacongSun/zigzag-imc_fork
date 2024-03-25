@@ -18,6 +18,7 @@ from zigzag.classes.hardware.architecture.get_cacti_cost import get_cacti_cost
 from zigzag.classes.hardware.architecture.operational_unit import Multiplier
 from zigzag.classes.hardware.architecture.operational_array import MultiplierArray
 import random
+import time
 
 def drawPieMarker(xs, ys, ratios, sizes, colors, ax=None):
     # This function is to plot scatter pie chart.
@@ -2271,7 +2272,6 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     # sram_sizes: int
     # Dimensions: int
     # periods: float
-    import time
     trig_time = time.time()
     data_vals = []
     os.system("rm -rf outputs/*")
@@ -2279,7 +2279,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
         for acc_type in acc_types:
             for sram_size in sram_sizes:
                 for d in Dimensions:
-                    print(f"workload: {workload}, acc: {acc_type}, sram: {sram_size}, dim: {d}")
+                    if workload == workloads[-1]:  # show info only at last, to lower the simulation time overhead
+                        print(f"workload: {workload}, acc: {acc_type}, sram: {sram_size}, dim: {d}")
                     tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, D1=d, D2=d, D3=1)
                     if workload == "peak":
                         # peak performance assessment below
@@ -2632,14 +2633,16 @@ if __name__ == "__main__":
     # variables: cols_nbs => [32, 64, .., 1024]
     # variables: rows_nbs => rows_nbs = cols_nbs
     # variables:
-    periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25, "geo":1e+9/((1*10*0.75*25)**0.25)}  # unit: ns
+    periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25, "geo":1e+9/((1*10*0.75*25)**0.25),
+               "resnet18": 1e+9/25}  # unit: ns (geo means geometric mean of mlperf-tiny workloads; resnet18's period is set to be same as resnet8.
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
+    # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
     sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
-    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}   # exclude batch and relu
-    pickle_exist = False  # read output directly if the output is saved in the last run
+    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
+    pickle_exist = True  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
         #########################################
@@ -2666,7 +2669,7 @@ if __name__ == "__main__":
         # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
-        workload = "resnet8"
+        workload = "geo"
         sram_size = 256*1024
         i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
         assert workload in workloads, f"Legal workload: {workloads}"
@@ -2675,18 +2678,14 @@ if __name__ == "__main__":
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
         ## (1) check if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
+        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
         ## (2) check performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
         ## (3) check carbon breakdown of different carbon components for different area (x axis: area) (note: workload != geo)
         # plot_carbon_breakdown_in_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
         ## (4) plot carbon comparison across 4 scenarios
-        # raw_data = {
-        #     "data": df,
-        #     "workloads": workloads,
-        #     "periods": periods,
-        # }
+        # raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=False, d1_equal_d2=True)
 
         ## plot_bar below is for plotting cost breakdown for a fixed workload and sram size (obsolete, to be removed)
