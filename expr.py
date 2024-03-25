@@ -1546,11 +1546,12 @@ def plot_bar(i_df, acc_types, workload, sram_size=256*1024):
     plt.tight_layout()
     plt.show()
 
-def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*1024):
+def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
     # This function defines the memory hierarchy in the hardware template.
     # @para parray: digital pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
+    # @para dram_size: define the off-chip dram size, unit: byte
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
 
@@ -1625,10 +1626,10 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
     #######################################################################################################################
 
     # dram_size = 1*1024*1024*1024 # unit: byte
-    dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
+    # dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
     dram_ac_cost_per_bit = 3.7  # unit: pJ/bit
     dram_bw = parray.dimension_sizes[0] * 8 * parray.dimension_sizes[2]
-    dram_100MB_32_3r_3w = MemoryInstance(
+    dram_3r_3w = MemoryInstance(
         name="dram_1GB",
         size=dram_size*8, # byte -> bit
         r_bw=dram_bw,
@@ -1690,7 +1691,7 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
     ####################################################################################################################
 
     memory_hierarchy_graph.add_memory(
-        memory_instance=dram_100MB_32_3r_3w,
+        memory_instance=dram_3r_3w,
         operands=("I1", "I2", "O"),
         port_alloc=(
             {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
@@ -1709,11 +1710,12 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
     return memory_hierarchy_graph
 
 
-def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024):
+def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
     # This function defines the memory hierarchy in the hardware template.
     # @para parray: digital pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
+    # @para dram_size: define the off-chip dram size, unit: byte
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
 
@@ -1789,10 +1791,10 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
     #######################################################################################################################
 
     # dram_size = 1*1024*1024*1024 # unit: byte
-    dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
+    # dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
     dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
     dram_bw = parray.dimension_sizes[0] * 8 * parray.dimension_sizes[2]
-    dram_100MB_32_3r_3w = MemoryInstance(
+    dram_3r_3w = MemoryInstance(
         name="dram_1GB",
         size=dram_size*8, # byte -> bit
         r_bw=dram_bw,
@@ -1852,7 +1854,7 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
     ####################################################################################################################
 
     memory_hierarchy_graph.add_memory(
-        memory_instance=dram_100MB_32_3r_3w,
+        memory_instance=dram_3r_3w,
         operands=("I1", "I2", "O"),
         port_alloc=(
             {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
@@ -1870,11 +1872,12 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024):
+def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
     # This function defines the memory hierarchy in the hardware template.
     # @para imc_array: imc pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
+    # @para dram_size: define the off-chip dram size, unit: byte
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
     tech_param = imc_array.unit.logic_unit.tech_param
@@ -1957,10 +1960,10 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024)
     #######################################################################################################################
 
     # dram_size = 1*1024*1024*1024 # unit: byte
-    dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
+    # dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
     dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
     dram_bw = imc_array.unit.wl_dim_size * hd_param["weight_precision"] * imc_array.unit.nb_of_banks
-    dram_100MB_32_3r_3w = MemoryInstance(
+    dram_3r_3w = MemoryInstance(
         name="dram_1GB",
         size=dram_size*8, # byte -> bit
         r_bw=dram_bw,
@@ -2020,7 +2023,7 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024)
     ####################################################################################################################
 
     memory_hierarchy_graph.add_memory(
-        memory_instance=dram_100MB_32_3r_3w,
+        memory_instance=dram_3r_3w,
         operands=("I1", "I2", "O"),
         port_alloc=(
             {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
@@ -2039,17 +2042,21 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024)
     return memory_hierarchy_graph
 
 
-def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024):
+def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, workload="resnet8"):
     assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
+    if workload == "resnet18":
+        dram_size = 12 * 1024 * 1024  # 12 MB for resnet18
+    else:
+        dram_size = 1 * 1024 * 1024  # 1 MB for Mlperf Tiny workloads
     if acc_type in ["AIMC", "DIMC"]:
         imc_array = ImcArray(tech_param, hd_param, dims)
-        mem_hier = memory_hierarchy_dut_for_imc(imc_array, sram_size=sram_size)
+        mem_hier = memory_hierarchy_dut_for_imc(imc_array, sram_size=sram_size, dram_size=dram_size)
     else:
         parray, multiplier_energy = digital_array(dims)
         if acc_type == "pdigital_ws":
-            mem_hier = memory_hierarchy_dut_for_pdigital_ws(parray, sram_size=sram_size)
+            mem_hier = memory_hierarchy_dut_for_pdigital_ws(parray, sram_size=sram_size, dram_size=dram_size)
         else:
-            mem_hier = memory_hierarchy_dut_for_pdigital_os(parray, sram_size=sram_size)
+            mem_hier = memory_hierarchy_dut_for_pdigital_os(parray, sram_size=sram_size, dram_size=dram_size)
         imc_array = parray
 
     core = {Core(1, imc_array, mem_hier)}
@@ -2257,7 +2264,7 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
 
     return CF_PER_OP_fixed_time, tt_cf_bd_fixed_time, CF_PER_OP_fixed_work, tt_cf_bd_fixed_work, CF_PER_OP_fixed_time_ex_pkg,CF_PER_OP_fixed_work_ex_pkg
 
-def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict):
+def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
     # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
@@ -2334,6 +2341,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/mobilenet_v1.onnx"
                         elif workload == "resnet8":
                             workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/resnet8.onnx"
+                        elif workload == "resnet18":
+                            workload_dir = "zigzag/inputs/examples/workload/resnet18.onnx"
                         else:
                             breakpoint()  # to be extended to other networks
 
@@ -2353,7 +2362,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                     "spatial_mapping_hint": {"D1": ["K", "OX"], "D2": ["C", "FX", "FY"]},
                                 }
                             }
-                        accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size)
+                        accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload)
 
                         # Call API
                         hw_name = acc_type
@@ -2488,7 +2497,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                    dff.t_area.to_list()[0],
                         "cme": dff.cme.to_list()[0],
                     }
-                    if workload not in ["peak", "geo"]:
+                    if workload not in ["peak", "geo", "resnet18"]:
                         geo_topsw *= new_res["topsw"]
                         geo_tops *= new_res["tops"]
                         geo_topsmm2 *= new_res["topsmm2"]
@@ -2507,36 +2516,37 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                 geo_cf_fw = geo_cf_fw ** (1 / len(workloads))
                 geo_cf_ft_ex_pkg = geo_cf_ft_ex_pkg ** (1 / len(workloads))
                 geo_cf_fw_ex_pkg = geo_cf_fw_ex_pkg ** (1 / len(workloads))
-                geo_res = {
-                    "workload": "geo",
-                    "acc_type": acc_type,
-                    "sram_size": sram_size,
-                    "dim": dim,
-                    "ops": geo_ops,
-                    "area": new_res["area"],
-                    "lat": None,
-                    "tclk": new_res["tclk"],
-                    "en": None,
-                    "cf_ft": None,
-                    "cf_fw": None,
-                    "t_area": new_res["t_area"],
-                    "t_lat": geo_lat,
-                    "t_tclk": new_res["t_tclk"],
-                    "t_en": geo_en,
-                    "t_cf_ft": geo_cf_ft,
-                    "t_cf_fw": geo_cf_fw,
-                    "t_cf_ft_ex_pkg": geo_cf_ft_ex_pkg,
-                    "t_cf_fw_ex_pkg": geo_cf_fw_ex_pkg,
-                    "topsw": geo_topsw,
-                    "tops": geo_tops,
-                    "topsmm2": geo_topsmm2,
-                }
-                data_vals.append(geo_res)
+                if workloads != ["resnet18"]:
+                    geo_res = {
+                        "workload": "geo",
+                        "acc_type": acc_type,
+                        "sram_size": sram_size,
+                        "dim": dim,
+                        "ops": geo_ops,
+                        "area": new_res["area"],
+                        "lat": None,
+                        "tclk": new_res["tclk"],
+                        "en": None,
+                        "cf_ft": None,
+                        "cf_fw": None,
+                        "t_area": new_res["t_area"],
+                        "t_lat": geo_lat,
+                        "t_tclk": new_res["t_tclk"],
+                        "t_en": geo_en,
+                        "t_cf_ft": geo_cf_ft,
+                        "t_cf_fw": geo_cf_fw,
+                        "t_cf_ft_ex_pkg": geo_cf_ft_ex_pkg,
+                        "t_cf_fw_ex_pkg": geo_cf_fw_ex_pkg,
+                        "topsw": geo_topsw,
+                        "tops": geo_tops,
+                        "topsmm2": geo_topsmm2,
+                    }
+                    data_vals.append(geo_res)
     new_df = pd.DataFrame(data_vals)
     df = new_df
 
     # save df to pickle
-    with open("expr_res.pkl", "wb") as fp:
+    with open(pkl_name, "wb") as fp:
         pickle.dump(df, fp)
     print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
     targ_time = time.time()
@@ -2634,8 +2644,12 @@ if __name__ == "__main__":
     if pickle_exist == False:
         #########################################
         ## Simulation
+        if workloads == ["resnet18"]:
+            pkl_name = "expr_res_resnet18.pkl"
+        else:
+            pkl_name = "expr_res.pkl"
         zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
-                                             Dimensions=Dimensions, periods=periods)
+                                             Dimensions=Dimensions, periods=periods, pkl_name=pkl_name)
     else:
         ## Step 1: load df from pickle
         with open("expr_res.pkl", "rb") as fp:
