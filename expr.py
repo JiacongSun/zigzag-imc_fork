@@ -1614,8 +1614,8 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
         r_cost=sram_r_cost,
         w_cost=sram_w_cost,
         area=sram_area,
-        r_port=3,
-        w_port=3,
+        r_port=4,
+        w_port=4,
         rw_port=0,
         latency=1,
         min_r_granularity=sram_bw//16,  # assume there are 16 sub-banks
@@ -1678,10 +1678,11 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=sram_256KB_256_3r_3w,
-        operands=("I1", "O",),
+        operands=("I1", "I2", "O",),
         port_alloc=(
             {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
-            {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
+            {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
+            {"fh": "w_port_3", "tl": "r_port_3", "fl": "w_port_4", "th": "r_port_4"},
         ),
         served_dimensions="all",
     )
@@ -1839,9 +1840,10 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=sram_256KB_256_3r_3w,
-        operands=("I1","O",),
+        operands=("I1", "O",),
         port_alloc=(
             {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            # {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
@@ -1868,7 +1870,7 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
+def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024):
     # This function defines the memory hierarchy in the hardware template.
     # @para imc_array: imc pe array object
     # @para visualize: whether illustrate teh memory hierarchy
@@ -2006,9 +2008,10 @@ def memory_hierarchy_dut(imc_array, visualize=False, sram_size=256*1024):
 
     memory_hierarchy_graph.add_memory(
         memory_instance=sram_256KB_256_3r_3w,
-        operands=("I1","O",),
+        operands=("I1", "O",),
         port_alloc=(
             {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            # {"fh": "w_port_4", "tl": "r_port_4", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
@@ -2040,7 +2043,7 @@ def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024):
     assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
     if acc_type in ["AIMC", "DIMC"]:
         imc_array = ImcArray(tech_param, hd_param, dims)
-        mem_hier = memory_hierarchy_dut(imc_array, sram_size=sram_size)
+        mem_hier = memory_hierarchy_dut_for_imc(imc_array, sram_size=sram_size)
     else:
         parray, multiplier_energy = digital_array(dims)
         if acc_type == "pdigital_ws":
@@ -2056,7 +2059,7 @@ def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024):
     return accelerator
 
 
-def get_imc_param_setting(acc_type="DIMC", cols=32, rows=32, D3=1):
+def get_imc_param_setting(acc_type="DIMC", D1=32, D2=32, D3=1):
     ## type: pdigital, DIMC or AIMC
     # cols: int, can divide with 8
     # rows: int
@@ -2065,11 +2068,10 @@ def get_imc_param_setting(acc_type="DIMC", cols=32, rows=32, D3=1):
 
     ##################
     ## dimensions
-    assert cols // 8 == cols / 8, f"cols {cols} cannot divide with 8."
     dimensions = {
         # "D1": cols // 8,  # wordline dimension
-        "D1": cols,  # wordline dimension
-        "D2": rows,  # bitline dimension
+        "D1": D1,  # wordline dimension
+        "D2": D2,  # bitline dimension
         "D3": D3,  # nb_macros
     }  # {"D1": ("K", 4), "D2": ("C", 32),}
 
@@ -2270,7 +2272,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
         for acc_type in acc_types:
             for sram_size in sram_sizes:
                 for d in Dimensions:
-                    tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, cols=d, rows=d, D3=1)
+                    print(f"workload: {workload}, acc: {acc_type}, sram: {sram_size}, dim: {d}")
+                    tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, D1=d, D2=d, D3=1)
                     if workload == "peak":
                         # peak performance assessment below
                         if acc_type in ["AIMC", "DIMC"]:
@@ -2593,6 +2596,11 @@ def save_as_pickle(df, filename):
     with open(filename, "wb") as fp:
         pickle.dump(df, fp)
 
+def read_pickle(filename="result.pkl"):
+    with open(filename, "rb") as fp:
+        df = pickle.load(fp)
+    return df
+
 if __name__ == "__main__":
     #########################################
     ## TOP DESCRIPTION
@@ -2605,8 +2613,8 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    experiment_1_literature_trend()
-    breakpoint()
+    # experiment_1_literature_trend()
+    # breakpoint()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -2618,11 +2626,10 @@ if __name__ == "__main__":
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    sram_sizes = [64*1024, 128*1024, 256*1024, 512*1024, 1024*1024]
-    # sram_sizes = [256 * 1024]
+    sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632}   # exclude batch and relu
-    pickle_exist = True  # read output directly if the output is saved in the last run
+    pickle_exist = False  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
         #########################################
