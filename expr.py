@@ -500,7 +500,7 @@ def plot_carbon_footprint_across_years_in_literature(data, period=4e+3, op_per_t
     plt.tight_layout()
     plt.show()
 
-def plot_curve(i_df, acc_types, workload, sram_size=256*1024, d1_equal_d2=False):
+def plot_curve(i_df, acc_types, workload, sram_size=256*1024, d1_equal_d2=True):
     # This function is to plot topsw, tops, topsmm2, carbon footprint in curve, for both AIMC and DIMC, under
     # a fixed workload and sram size.
     colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f', u'#bcbd22',
@@ -571,7 +571,65 @@ def plot_curve(i_df, acc_types, workload, sram_size=256*1024, d1_equal_d2=False)
     plt.tight_layout()
     plt.show()
 
-def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, complexity=10, raw_data={}, plot_breakdown=False, d1_equal_d2=False):
+def calc_carbon_footprint_for_complex_task(raw_data, acc_type, workload, sram_size, complexity):
+    # function to calculate carbon for complex tasks under the fixed-work scenario
+    def calc_carbon_footprint_for_complex_task_per_workload(raw_data, acc_type, workload, sram_size, complexity):
+        assert workload not in ["peak", "geo"], f"Workload {workload} is not supported."
+        # (1) clip the raw data
+        entire_df = raw_data["data"]
+        periods = raw_data["periods"]
+        period = periods[workload]
+        try:
+            dim = raw_data["dim"]
+        except KeyError:
+            dim = None
+        if isinstance(sram_size, list) and len(sram_size) > 0:
+            use_df = entire_df[(entire_df.workload == workload) & (entire_df.dim == dim) & (
+                    entire_df.acc_type == acc_type)]
+        else:
+            use_df = entire_df[(entire_df.workload == workload) & (entire_df.sram_size == sram_size) & (
+                    entire_df.acc_type == acc_type)]
+        # (2) collect original carbon breakdown for the workload
+        cf_ft_breakdown = use_df.cf_ft.to_numpy()
+        cf_fw_breakdown = use_df.cf_fw.to_numpy()
+        operational_cf = np.array([case["opcf"] for case in cf_fw_breakdown])
+        inference_time = np.array([case["runtime"] for case in cf_ft_breakdown])
+        soc_epa = np.array([case["soc_epa"] for case in cf_fw_breakdown])
+        soc_gpa = np.array([case["soc_gpa"] for case in cf_fw_breakdown])
+        soc_mpa = np.array([case["soc_mpa"] for case in cf_fw_breakdown])
+        dram_cost = np.array([case["dram"] for case in cf_fw_breakdown])
+        embodied_cf = soc_epa + soc_gpa + soc_mpa + dram_cost
+        # (3) check if the complexity exceeds the limit
+        max_complexity_scaling = period / max(inference_time)
+        assert complexity <= max_complexity_scaling, \
+            f"Current complexity level {complexity} exceed the maximum allowed level {max_complexity_scaling} for workload {workload}"
+        # (4) convert to the new complex case
+        complex_operational_cf = operational_cf * complexity
+        complex_embodied_cf = embodied_cf
+        cf_fw_complex = complex_operational_cf + complex_embodied_cf
+        return cf_fw_complex
+
+    if workload != "geo":
+        cf_fw_complex = calc_carbon_footprint_for_complex_task_per_workload(raw_data, acc_type, workload, sram_size, complexity)
+    else:
+        cf_fw_complex_list = []
+        workload_counts = 0
+        for workload in raw_data["workloads"]:
+            if workload in ["peak", "geo"]:
+                continue
+            workload_counts += 1
+            cf_fw_complex_list.append(calc_carbon_footprint_for_complex_task_per_workload(raw_data, acc_type, workload, sram_size, complexity))
+        breakpoint()
+        for i in range(len(cf_fw_complex_list)):
+            if i == 0:
+                geo_cf_fw_complex = cf_fw_complex_list[i]
+            else:
+                geo_cf_fw_complex = geo_cf_fw_complex * cf_fw_complex_list[i]
+        cf_fw_complex = geo_cf_fw_complex ** (1/workload_counts)
+        breakpoint()
+    return cf_fw_complex
+
+def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, complexity=50, raw_data={}, plot_breakdown=False, d1_equal_d2=True):
     # This function is to plot total carbon cost (in curve) for pdigital, aimc and dimc, under 4 cases:
     # (1) fixed-time, simple task
     # (2) fixed-work, simple task
@@ -580,61 +638,6 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
     # The output figure consists of 4 subplots (x-axis: area, y-axis: carbon/inference), corresponding to the cases above.
     # @para sram_size: value [x axis is dim size]; list [x axis is sram size].
 
-    def calc_carbon_footprint_for_complex_task(raw_data, acc_type, workload, sram_size, complexity):
-        # function to calculate carbon for complex tasks under the fixed-work scenario
-        def calc_carbon_footprint_for_complex_task_per_workload(raw_data, acc_type, workload, sram_size, complexity):
-            assert workload not in ["peak", "geo"], f"Workload {workload} is not supported."
-            # (1) clip the raw data
-            entire_df = raw_data["data"]
-            periods = raw_data["periods"]
-            period = periods[workload]
-            try:
-                dim = raw_data["dim"]
-            except KeyError:
-                dim = None
-            if isinstance(sram_size, list) and len(sram_size) > 0:
-                use_df = entire_df[(entire_df.workload == workload) & (entire_df.dim == dim) & (
-                        entire_df.acc_type == acc_type)]
-            else:
-                use_df = entire_df[(entire_df.workload == workload) & (entire_df.sram_size == sram_size) & (
-                        entire_df.acc_type == acc_type)]
-            # (2) collect original carbon breakdown for the workload
-            cf_ft_breakdown = use_df.cf_ft.to_numpy()
-            cf_fw_breakdown = use_df.cf_fw.to_numpy()
-            operational_cf = np.array([case["opcf"] for case in cf_fw_breakdown])
-            inference_time = np.array([case["runtime"] for case in cf_ft_breakdown])
-            soc_epa = np.array([case["soc_epa"] for case in cf_fw_breakdown])
-            soc_gpa = np.array([case["soc_gpa"] for case in cf_fw_breakdown])
-            soc_mpa = np.array([case["soc_mpa"] for case in cf_fw_breakdown])
-            dram_cost = np.array([case["dram"] for case in cf_fw_breakdown])
-            embodied_cf = soc_epa + soc_gpa + soc_mpa + dram_cost
-            # (3) check if the complexity exceeds the limit
-            max_complexity_scaling = period / max(inference_time)
-            assert complexity <= max_complexity_scaling, \
-                f"Current complexity level {complexity} exceed the maximum allowed level {max_complexity_scaling} for workload {workload}"
-            # (4) convert to the new complex case
-            complex_operational_cf = operational_cf * complexity
-            complex_embodied_cf = embodied_cf
-            cf_fw_complex = complex_operational_cf + complex_embodied_cf
-            return cf_fw_complex
-
-        if workload != "geo":
-            cf_fw_complex = calc_carbon_footprint_for_complex_task_per_workload(raw_data, acc_type, workload, sram_size, complexity)
-        else:
-            cf_fw_complex_list = []
-            workload_counts = 0
-            for workload in raw_data["workloads"]:
-                if workload in ["peak", "geo"]:
-                    continue
-                workload_counts += 1
-                cf_fw_complex_list.append(calc_carbon_footprint_for_complex_task_per_workload(raw_data, acc_type, workload, sram_size, complexity))
-            for i in range(len(cf_fw_complex_list)):
-                if i == 0:
-                    geo_cf_fw_complex = cf_fw_complex_list[i]
-                else:
-                    geo_cf_fw_complex *= cf_fw_complex_list[i]
-            cf_fw_complex = geo_cf_fw_complex ** (1/workload_counts)
-        return cf_fw_complex
 
     colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
               u'#bcbd22', u'#17becf']
@@ -788,7 +791,7 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
     plt.tight_layout()
     plt.show()
 
-def plot_performance_bar(i_df, acc_types: list, workload: str, sram_size=256*1024, d1_equal_d2=False, breakdown=True):
+def plot_performance_bar(i_df, acc_types: list, workload: str, sram_size=256*1024, d1_equal_d2=True, breakdown=True):
     # This function is to plot performance for pdigital_os, pdigital_ws, aimc and dimc, under fixed sram size.
     # @para sram_size: value [x axis is D1xD2]; list [x axis is sram size]
     # @para d1_equal_d2: True [D1=D2=dim]; False [D1=dim//8, D2=dim]
@@ -939,19 +942,17 @@ def plot_performance_bar(i_df, acc_types: list, workload: str, sram_size=256*102
     plt.tight_layout()
     plt.show()
 
-def plot_carbon_breakdown_in_curve(i_df, acc_types, workload, sram_size=256*1024, d1_equal_d2=False):
+def plot_carbon_breakdown_in_curve(i_df, acc_types, workload, sram_size=256*1024, d1_equal_d2=True):
     # This function is to plot carbon cost breakdown (in curve) for pdigital, aimc and dimc, under fixed workload and fixed sram size.
     # The output figure consists of 2 subplots (x-axis: area):
     # 1th (left): carbon footprint breakdown (fixed-time)
     # 2th (right): carbon footprint breakdown (fixed-work)
-    # Within all subplots: from left to right bar: pdigital, AIMC, DIMC.
 
     assert workload != "geo", "geo does not have carbon breakdown, so the breakdown plots cannot be generated."
 
     colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
               u'#bcbd22', u'#17becf']
     markers = ["s", "o", "^", "p"]
-    width = 0.35
     font_size = 15
     df = i_df[(i_df.workload == workload) & (i_df.sram_size == sram_size)]
     if d1_equal_d2:
@@ -1082,6 +1083,90 @@ def plot_carbon_breakdown_in_curve(i_df, acc_types, workload, sram_size=256*1024
 
     plt.tight_layout()
     plt.show()
+
+def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, complexity=50, raw_data={}, d1_equal_d2=True, active_plot=True):
+    # This function is to plot carbon cost in entire exploration space in a scatter plot.
+    # The output figure consists of 4 subplots (x-axis: area):
+    # 1th (left): carbon footprint breakdown (fixed-time)
+    # 2th (right): carbon footprint breakdown (fixed-work)
+    colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+              u'#bcbd22', u'#17becf']
+    markers = ["s", "o", "^", "p"]
+    font_size = 15
+    df = raw_data["data"]
+    df = df[(df.workload == workload)]
+    if d1_equal_d2:
+        dim_d1 = df.dim
+    else:
+        dim_d1 = df.dim // 8
+    df["imc"] = dim_d1.astype(str) + f"$\\times$" + df.dim.astype(str)  # D1 x D2
+    ## For active plotting using plotly.express
+    if active_plot:
+        df["dim_str"] = df["dim"].astype(str)
+        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type", hover_data={"acc_type","sram_size", "dim"})
+        # fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type",
+        #                  hover_data={"acc_type", "sram_size", "dim"}, log_y=True, log_x=True)
+        ## add marker style
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')), selector=dict(mode='markers'))
+        fig.show()
+    else:
+        fig_rows_nbs = 2
+        fig_cols_nbs = 2
+        fig, axs = plt.subplots(nrows=fig_rows_nbs, ncols=fig_cols_nbs, figsize=(10, 8))
+        cf_ft_simple_cur = axs[0][0]  # CF/inference
+        cf_fw_simple_cur = axs[0][1]  # CF/inference
+        cf_ft_complex_cur = axs[1][0]  # CF/inference
+        cf_fw_complex_cur = axs[1][1]  # CF/inference
+
+        for ii_a, a in enumerate(acc_types):
+            for ii_b, sram_size in enumerate(sram_sizes):
+                for ii_c, dim in enumerate(set(df["dim"].to_list())):
+                    dff = df[(df.acc_type == a) & (df.sram_size == sram_size) & (df.dim == dim)]
+                    # Create positions for the bars on the x-axis
+                    x_pos = dff.t_area.to_numpy()
+
+                    # Plot cf, simple (fixed-time)
+                    cf_ft = dff.t_cf_ft_ex_pkg.to_numpy()
+                    if ii_b == 0:
+                        label = f"{a}, {dim}"
+                    else:
+                        label = None
+                    cf_ft_simple_cur.scatter(x_pos, cf_ft, label=label, color=colors[ii_c], marker=markers[ii_a])
+
+                    # Plot cf, simple (fixed-work)
+                    cf_fw = dff.t_cf_fw_ex_pkg.to_numpy()
+                    cf_fw_simple_cur.plot(x_pos, cf_fw, label=label, color=colors[ii_c], marker=markers[ii_a])
+
+                    # Plot cf, complex (fixed-time)
+                    cf_ft_complex = cf_ft * complexity
+                    cf_ft_complex_cur.plot(x_pos, cf_ft_complex, label=label, color=colors[ii_c], marker=markers[ii_a])
+
+                    # Plot cf, complext (fixed-work)
+                    cf_fw_complex = calc_carbon_footprint_for_complex_task(raw_data=raw_data,
+                                                                           acc_type=a,
+                                                                           workload=workload,
+                                                                           sram_size=sram_size,
+                                                                           complexity=complexity)
+                    cf_fw_complex_cur.plot(x_pos, cf_fw_complex[ii_c], label=label, color=colors[ii_c], marker=markers[ii_a])
+    # configuration
+        for i in range(0, fig_rows_nbs):
+            for j in range(0, fig_cols_nbs):
+                axs[i][j].set_xscale("log")
+                axs[i][j].set_yscale("log")
+                axs[i][j].grid(which="both")
+                axs[i][j].set_axisbelow(True)
+                # axs[i][j].legend(loc="upper left")
+        axs[fig_rows_nbs - 1][0].set_xlabel(f"Area (mm$^2$)")
+        axs[fig_rows_nbs - 1][1].set_xlabel(f"Area (mm$^2$)")
+        axs[1][0].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-time)", fontsize=font_size*1.2)
+        axs[1][1].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-work)", fontsize=font_size*1.2)
+        axs[0][0].set_title(f"Simple task [{workload}]")
+        axs[0][1].set_title(f"Simple task [{workload}]")
+        axs[1][0].set_title(f"Complex task [{complexity}x {workload}]")
+        axs[1][1].set_title(f"Complex task [{complexity}x {workload}]")
+
+        plt.tight_layout()
+        plt.show()
 
 def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
     # This function defines the memory hierarchy in the hardware template.
@@ -1245,7 +1330,6 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
 
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
-
 
 def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
     # This function defines the memory hierarchy in the hardware template.
@@ -1578,7 +1662,6 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-
 def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, workload="resnet8"):
     assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
     if workload == "resnet18":
@@ -1601,7 +1684,6 @@ def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, wo
     accelerator = Accelerator(acc_name, core)
 
     return accelerator
-
 
 def get_imc_param_setting(acc_type="DIMC", D1=32, D2=32, D3=1):
     ## type: pdigital, DIMC or AIMC
@@ -1815,7 +1897,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
         for acc_type in acc_types:
             for sram_size in sram_sizes:
                 for d in Dimensions:
-                    if workload == workloads[-1]:  # show info only at last, to lower the simulation time overhead
+                    if workload == workloads[-1] and acc_type == acc_types[-1]:  # show info only at last, to lower the simulation time overhead
                         print(f"workload: {workload}, acc: {acc_type}, sram: {sram_size}, dim: {d}")
                     tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, D1=d, D2=d, D3=1)
                     if workload == "peak":
@@ -1976,6 +2058,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
 
     #########################################
     ## Add geo-mean and calculation for topsw/tops/topsmm2 to the results gotten above
+    # Targeted workloads: mlperf-tiny benchmarks (4 workloads: ae, ds_cnn, mobilenet-v1, resnet8)
     # Formula:
     # TOP/s/W   = 1/(energy: pJ/op)
     # TOP/s     = nbs_of_ops / (time: ps)
@@ -2034,7 +2117,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                    dff.t_area.to_list()[0],
                         "cme": dff.cme.to_list()[0],
                     }
-                    if workload not in ["peak", "geo", "resnet18"]:
+                    if workload in ["ae", "ds_cnn", "mobilenet", "resnet8"]:
                         geo_topsw *= new_res["topsw"]
                         geo_tops *= new_res["tops"]
                         geo_topsmm2 *= new_res["topsmm2"]
@@ -2046,14 +2129,15 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         geo_cf_ft_ex_pkg *= new_res["t_cf_ft_ex_pkg"]
                         geo_cf_fw_ex_pkg *= new_res["t_cf_fw_ex_pkg"]
                     data_vals.append(new_res)
-                geo_topsw = geo_topsw ** (1 / len(workloads))
-                geo_tops = geo_tops ** (1 / len(workloads))
-                geo_topsmm2 = geo_topsmm2 ** (1 / len(workloads))
-                geo_cf_ft = geo_cf_ft ** (1 / len(workloads))
-                geo_cf_fw = geo_cf_fw ** (1 / len(workloads))
-                geo_cf_ft_ex_pkg = geo_cf_ft_ex_pkg ** (1 / len(workloads))
-                geo_cf_fw_ex_pkg = geo_cf_fw_ex_pkg ** (1 / len(workloads))
+
                 if workloads != ["resnet18"]:
+                    geo_topsw = geo_topsw ** (1 / 4)
+                    geo_tops = geo_tops ** (1 / 4)
+                    geo_topsmm2 = geo_topsmm2 ** (1 / 4)
+                    geo_cf_ft = geo_cf_ft ** (1 / 4)
+                    geo_cf_fw = geo_cf_fw ** (1 / 4)
+                    geo_cf_ft_ex_pkg = geo_cf_ft_ex_pkg ** (1 / 4)
+                    geo_cf_fw_ex_pkg = geo_cf_fw_ex_pkg ** (1 / 4)
                     geo_res = {
                         "workload": "geo",
                         "acc_type": acc_type,
@@ -2083,8 +2167,9 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     df = new_df
 
     # save df to pickle
-    with open(pkl_name, "wb") as fp:
-        pickle.dump(df, fp)
+    save_as_pickle(df, pkl_name)
+    df = df.drop("cme", axis=1)  # delete cme to reduce file size
+    save_as_pickle(df, f"no_cme_{pkl_name}")
     print(f"SIMULATION done. Turn pickle_exist to True to enable the figure display.")
     targ_time = time.time()
     sim_time = round(targ_time-trig_time, 1)
@@ -2191,8 +2276,7 @@ if __name__ == "__main__":
                                              Dimensions=Dimensions, periods=periods, pkl_name=pkl_name)
     else:
         ## Step 1: load df from pickle
-        with open("expr_res.pkl", "rb") as fp:
-            df = pickle.load(fp)
+        df = read_pickle("no_cme_expr_res.pkl")
         workloads.append("geo")  # append geo so that plotting for geo is also supported
 
         ## Step 2:
@@ -2221,8 +2305,10 @@ if __name__ == "__main__":
         ## (3) check carbon breakdown of different carbon components for different area (x axis: area) (note: workload != geo)
         # plot_carbon_breakdown_in_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
         ## (4) plot carbon comparison across 4 scenarios
-        # raw_data = {"data": df, "workloads": workloads, "periods": periods,}
+        raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=False, d1_equal_d2=True)
+        ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
+        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=False)
         breakpoint()
 
         #######################
