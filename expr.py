@@ -1930,20 +1930,38 @@ def plot_area_trend_in_literature(data):
     ####################
     # plot figures
     colors = cm.hsv(np.linspace(0, 255, np.array(areas_sorted).shape[0]).astype(int))
-    blob_area = 20 * np.pi * np.array(areas_sorted)
+    scale_factor = 20 * np.pi
+    blob_area = scale_factor * np.array(areas_sorted)
     fig, ax = plt.subplots(figsize=(10, 8))
     fontsize = 24
     ax.scatter(netsizes_sorted, topsws_sorted, s=blob_area, marker="o", edgecolors="black", c=colors)
     ax.scatter(netsizes_sorted, topsws_sorted, s=2, marker="o", c="white")
+
     ## text to label #parallelism
     # for x, y, txt in zip(netsizes_sorted, topsws_sorted, parallelisms_sorted):
     #     ax.text(x, y, f"({int(txt)})", ha="center", fontsize=18)
+
+    ## Plot legend blobs
+    legend_x = np.asarray([2, 5, 10, 30, 80])
+    legend_y = np.asarray([100, 100, 100, 100, 100])
+    legend_values = np.asarray([0.1, 1, 5, 10, 50])
+    legend_names = np.asarray(["0.1 mm$^2$", "1 mm$^2$", "5 mm$^2$", "10 mm$^2$", "50 mm$^2$"])
+    ax.scatter(legend_x, legend_y, s=legend_values*scale_factor, c="white", edgecolors="black")
+    ax.annotate("Area:", xy=(legend_x[0]*0.5, legend_y[0]), verticalalignment="center", horizontalalignment="center", fontsize=18)
+    for x, y, txt in zip(legend_x, legend_y, legend_names):
+        if x < 80:
+            ax.text(x, y+3, f"{txt}", ha="center", fontsize=12)
+        else:
+            ax.text(x, y, f"{txt}", ha="center", fontsize=12)
+
+
+
     # Figure configuration
     plt.xticks(fontsize=18)
     plt.yticks(fontsize=18)
     # ax.set_ylabel(f"TOP/s/W (macro-level)", fontsize=fontsize)
     ax.set_ylabel(f"TOP/s/W", fontsize=fontsize)
-    ax.set_xlabel("Targeted network size [MB]", fontsize=fontsize)
+    ax.set_xlabel("Model size [MB]", fontsize=fontsize)
     ax.set_xscale("log")
     ax.grid("both")
     plt.tight_layout()
