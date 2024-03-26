@@ -576,6 +576,7 @@ def calc_carbon_footprint_for_complex_task(raw_data, acc_type, workload, sram_si
     # function to calculate carbon for complex tasks under the fixed-work scenario
     def calc_carbon_footprint_for_complex_task_per_workload(raw_data, acc_type, workload, sram_size, complexity):
         assert workload not in ["peak", "geo"], f"Workload {workload} is not supported."
+        assert complexity >= 1, f"Complexity [{complexity}] < 1 is not permitted."
         # (1) clip the raw data
         entire_df = raw_data["data"]
         periods = raw_data["periods"]
@@ -637,11 +638,14 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
     # The output figure consists of 4 subplots (x-axis: area, y-axis: carbon/inference), corresponding to the cases above.
     # @para sram_size: value [x axis is dim size]; list [x axis is sram size].
 
-
-    colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+    # colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+    #           u'#bcbd22', u'#17becf']
+    colors = [u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
               u'#bcbd22', u'#17becf']
     markers = ["s", "o", "^", "p"]
-    font_size = 15
+    font_size = 18
+    marker_size = 6
+    line_width = 1
     df = i_df[(i_df.workload == workload)]
     if d1_equal_d2:
         dim_d1 = df.dim
@@ -672,37 +676,39 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
             # Plot cf, simple (fixed-time)
             cf_ft = dff.t_cf_ft_ex_pkg.to_numpy()
             cf_ft_simple_cur.plot(x_pos, cf_ft, label=a, color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
-                           linestyle="--")
+                           linestyle="--", markersize=marker_size, linewidth=line_width)
+            # cf_ft_simple_cur.scatter(x_pos, cf_ft, label=a, color=colors[ii_a], marker=markers[ii_a], edgecolors="black",
+            #                          s=15)
 
-            ## Text dimension sizes on the plot
-            if ii_a in [0, 1, 2]:
-                if isinstance(sram_size, list) and len(sram_size) > 0:
-                    attached_text = dff.sram_size.to_numpy()
-                    attached_text = [f"{unit_text//1024}KB" for unit_text in attached_text]
-                else:
-                    attached_text = dff.imc
-                for x, y, txt in zip(x_pos, cf_ft, attached_text):
-                    cf_ft_simple_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
+            ## Text for dimension sizes on the plot
+            # if ii_a in [0, 1, 2]:
+            #     if isinstance(sram_size, list) and len(sram_size) > 0:
+            #         attached_text = dff.sram_size.to_numpy()
+            #         attached_text = [f"{unit_text//1024}KB" for unit_text in attached_text]
+            #     else:
+            #         attached_text = dff.imc
+            #     for x, y, txt in zip(x_pos, cf_ft, attached_text):
+            #         cf_ft_simple_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
 
             # Plot cf, simple (fixed-work)
             cf_fw = dff.t_cf_fw_ex_pkg.to_numpy()
             cf_fw_simple_cur.plot(x_pos, cf_fw, label=a, color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
-                           linestyle="--")
+                           linestyle="--", markersize=marker_size, linewidth=line_width)
 
-            ## Text dimension sizes on the plot
-            if ii_a in [2]:
-                if isinstance(sram_size, list) and len(sram_size) > 0:
-                    attached_text = dff.sram_size.to_numpy()
-                    attached_text = [f"{unit_text // 1024}KB" for unit_text in attached_text]
-                else:
-                    attached_text = dff.imc
-                for x, y, txt in zip(x_pos, cf_fw, attached_text):
-                    cf_fw_simple_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
+            ## Text for dimension sizes on the plot
+            # if ii_a in [2]:
+            #     if isinstance(sram_size, list) and len(sram_size) > 0:
+            #         attached_text = dff.sram_size.to_numpy()
+            #         attached_text = [f"{unit_text // 1024}KB" for unit_text in attached_text]
+            #     else:
+            #         attached_text = dff.imc
+            #     for x, y, txt in zip(x_pos, cf_fw, attached_text):
+            #         cf_fw_simple_cur.text(x, y, f"({txt})", ha="center", fontsize=8)
 
             # Plot cf, complex (fixed-time)
             cf_ft_complex = cf_ft * complexity
             cf_ft_complex_cur.plot(x_pos, cf_ft_complex, label=a, color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
-                           linestyle="--")
+                           linestyle="--", markersize=marker_size, linewidth=line_width)
 
             # Plot cf, complext (fixed-work)
             cf_fw_complex = calc_carbon_footprint_for_complex_task(raw_data=raw_data,
@@ -711,7 +717,7 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
                                                                   sram_size=sram_size,
                                                                   complexity=complexity)
             cf_fw_complex_cur.plot(x_pos, cf_fw_complex, label=a, color=colors[ii_a], marker=markers[ii_a], markeredgecolor="black",
-                                   linestyle="--")
+                                   linestyle="--", markersize=marker_size, linewidth=line_width)
         else:
             assert workload != "geo", f"geo workload does not have carbon breakdown."
             # Plot cf, simple (fixed-time)
@@ -728,11 +734,11 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
             cf_ft_simple_cur.plot(x_pos, cf_ft_operational, label=f"{a}-opcf", color=colors[ii_a], marker=markers[ii_a],
                                 markeredgecolor="black",
                                 markerfacecolor=colors[ii_a],
-                                linestyle="--")
+                                linestyle="--", markersize=marker_size, linewidth=line_width)
             cf_ft_simple_cur.plot(x_pos, cf_ft_embodied, label=f"{a}-edcf", color=colors[ii_a], marker=markers[ii_a],
                                 markeredgecolor="black",
                                 markerfacecolor=colors[ii_a],
-                                linestyle=":")
+                                linestyle=":", markersize=marker_size, linewidth=line_width)
             # Plot cf, simple (fixed-work)
             cf_fw_bd = dff.cf_fw.to_numpy()
             cf_fw_operational = []
@@ -747,29 +753,29 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
             cf_fw_simple_cur.plot(x_pos, cf_fw_operational, label=f"{a}-opcf", color=colors[ii_a], marker=markers[ii_a],
                                 markeredgecolor="black",
                                 markerfacecolor=colors[ii_a],
-                                linestyle="--")
+                                linestyle="--", markersize=marker_size, linewidth=line_width)
             cf_fw_simple_cur.plot(x_pos, cf_fw_embodied, label=f"{a}-edcf", color=colors[ii_a], marker=markers[ii_a],
                                 markeredgecolor="black",
                                 markerfacecolor=colors[ii_a],
-                                linestyle=":")
+                                linestyle=":", markersize=marker_size, linewidth=line_width)
             # Plot cf, complex (fixed-time)
             cf_ft_complex_cur.plot(x_pos, complexity*cf_ft_operational, label=f"{a}-opcf", color=colors[ii_a], marker=markers[ii_a],
                                   markeredgecolor="black",
                                   markerfacecolor=colors[ii_a],
-                                  linestyle="--")
+                                  linestyle="--", markersize=marker_size, linewidth=line_width)
             cf_ft_complex_cur.plot(x_pos, complexity*cf_ft_embodied, label=f"{a}-edcf", color=colors[ii_a], marker=markers[ii_a],
                                   markeredgecolor="black",
                                   markerfacecolor=colors[ii_a],
-                                  linestyle=":")
+                                  linestyle=":", markersize=marker_size, linewidth=line_width)
             # Plot cf, complext (fixed-work)
             cf_fw_complex_cur.plot(x_pos, complexity*cf_fw_operational, label=f"{a}-opcf", color=colors[ii_a], marker=markers[ii_a],
                                   markeredgecolor="black",
                                   markerfacecolor=colors[ii_a],
-                                  linestyle="--")
+                                  linestyle="--", markersize=marker_size, linewidth=line_width)
             cf_fw_complex_cur.plot(x_pos, cf_fw_embodied, label=f"{a}-edcf", color=colors[ii_a], marker=markers[ii_a],
                                   markeredgecolor="black",
                                   markerfacecolor=colors[ii_a],
-                                  linestyle=":")
+                                  linestyle=":", markersize=marker_size, linewidth=line_width)
     # configuration
     for i in range(0, fig_rows_nbs):
         for j in range(0, fig_cols_nbs):
@@ -778,10 +784,10 @@ def plot_total_carbon_curve_four_cases(i_df, acc_types, workload, sram_size, com
             axs[i][j].grid(which="both")
             axs[i][j].set_axisbelow(True)
             axs[i][j].legend(loc="upper left")
-    axs[fig_rows_nbs - 1][0].set_xlabel(f"Area (mm$^2$)")
-    axs[fig_rows_nbs - 1][1].set_xlabel(f"Area (mm$^2$)")
-    axs[1][0].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-time)", fontsize=font_size*1.2)
-    axs[1][1].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-work)", fontsize=font_size*1.2)
+    axs[fig_rows_nbs - 1][0].set_xlabel(f"Area [mm$^2$]")
+    axs[fig_rows_nbs - 1][1].set_xlabel(f"Area [mm$^2$]")
+    axs[1][0].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-time)", fontsize=font_size)
+    axs[1][1].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-work)", fontsize=font_size)
     axs[0][0].set_title(f"Simple task [{workload}]")
     axs[0][1].set_title(f"Simple task [{workload}]")
     axs[1][0].set_title(f"Complex task [{complexity}x {workload}]")
@@ -1094,6 +1100,7 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
     font_size = 15
     df = raw_data["data"]
     df = df[(df.workload == workload)]
+    periods = raw_data["periods"]
     if d1_equal_d2:
         dim_d1 = df.dim
     else:
@@ -1102,12 +1109,28 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
     ## For active plotting using plotly.express
     if active_plot:
         df["dim_str"] = df["dim"].astype(str)
-        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type", hover_data={"acc_type","sram_size", "dim"})
+        df["sram_size_KB"] = df["sram_size"]/1024  # unit: B -> KB
+        ## Scenario: continuously active
+        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type", hover_data={"acc_type","sram_size_KB", "dim"})
         # fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type",
         #                  hover_data={"acc_type", "sram_size", "dim"}, log_y=True, log_x=True)
         ## add marker style
-        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')), selector=dict(mode='markers'))
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="Scenario: continuously active",
+                          yaxis=dict(title="Carbon/task (exclude packaging) [g, CO2/task]"),
+                          xaxis=dict(title="Area (mm2)"))
         fig.show()
+        ## Scenario: periodically active
+        fig = px.scatter(df, x="t_area", y="t_cf_fw_ex_pkg", color="dim_str", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim"})
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="Scenario: periodically active",
+                          yaxis=dict(title="Carbon/task (exclude packaging) [g, CO2/task]"),
+                          xaxis=dict(title="Area (mm2)"))
+        fig.show()
+        breakpoint()
     else:
         fig_rows_nbs = 2
         fig_cols_nbs = 2
@@ -1119,7 +1142,8 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
 
         for ii_a, a in enumerate(acc_types):
             for ii_b, sram_size in enumerate(sram_sizes):
-                for ii_c, dim in enumerate(set(df["dim"].to_list())):
+                dims = sorted(list(set(df["dim"].to_list())))
+                for ii_c, dim in enumerate(dims):
                     dff = df[(df.acc_type == a) & (df.sram_size == sram_size) & (df.dim == dim)]
                     # Create positions for the bars on the x-axis
                     x_pos = dff.t_area.to_numpy()
@@ -2073,7 +2097,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         if wl_name == "onnx":
                             wl_name = re.split(r"/|\.", workload_dir)[-2]
                         experiment_id = f"{hw_name}-{wl_name}"
-                        pkl_name = f"{experiment_id}-saved_list_of_cmes"
+                        cmes_pkl_name = f"{experiment_id}-saved_list_of_cmes"
 
                         ans = get_hardware_performance_zigzag(
                             workload_dir,
@@ -2081,7 +2105,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             mapping,
                             opt="EDP",
                             dump_filename_pattern=f"outputs/{experiment_id}-layer_?.json",
-                            pickle_filename=f"outputs/{pkl_name}.pickle",
+                            pickle_filename=f"outputs/{cmes_pkl_name}.pickle",
                         )
                         # Read output
                         with open(f"outputs/{experiment_id}-layer_overall_complete.json", "r") as fp:
@@ -2332,7 +2356,7 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    experiment_1_literature_trend()
+    # experiment_1_literature_trend()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -2346,7 +2370,7 @@ if __name__ == "__main__":
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
     # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]
+    sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
     pickle_exist = True  # read output directly if the output is saved in the last run
@@ -2383,18 +2407,18 @@ if __name__ == "__main__":
         assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
-        ## (1) check if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
-        ## (2) check performance together with carbon (x axis: dimension size)
+        ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
+        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
+        ## (2) [check] performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
-        ## (3) check carbon breakdown of different carbon components for different area (x axis: area) (note: workload != geo)
+        ## (3) [check] carbon breakdown of different carbon components for different area (x axis: area) (note: workload != geo)
         # plot_carbon_breakdown_in_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
         ## (4) plot carbon comparison across 4 scenarios
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=False, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=False)
+        # scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
         breakpoint()
 
         #######################
