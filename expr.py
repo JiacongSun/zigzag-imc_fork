@@ -1111,9 +1111,9 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
         df["dim_str"] = df["dim"].astype(str)
         df["sram_size_KB"] = df["sram_size"]/1024  # unit: B -> KB
         ## Scenario: continuously active
-        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type", hover_data={"acc_type","sram_size_KB", "dim"})
-        # fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type",
-        #                  hover_data={"acc_type", "sram_size", "dim"}, log_y=True, log_x=True)
+        # fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type", hover_data={"acc_type","sram_size_KB", "dim"})
+        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size", "dim"}, log_y=True, log_x=True)
         ## add marker style
         fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
                           selector=dict(mode='markers'))
@@ -2086,7 +2086,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                 "default": {
                                     "core_allocation": 1,
                                     "memory_operand_links": {"O": "O", "W": "I2", "I": "I1"},
-                                    "spatial_mapping_hint": {"D1": ["K", "OX"], "D2": ["C", "FX", "FY"]},
+                                    "spatial_mapping_hint": {"D1": ["K"], "D2": ["C", "FX", "FY"]},
                                 }
                             }
                         accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload)
@@ -2408,7 +2408,7 @@ if __name__ == "__main__":
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
         ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
+        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
         ## (2) [check] performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
@@ -2418,7 +2418,7 @@ if __name__ == "__main__":
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=False, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        # scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
         breakpoint()
 
         #######################
