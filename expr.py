@@ -1337,11 +1337,12 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_3r_3w,
-        operands=("I1", "I2", "O"),
+        # operands=("I1", "I2", "O"),
+        operands=("I2",),
         port_alloc=(
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1499,11 +1500,12 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_3r_3w,
-        operands=("I1", "I2", "O"),
+        # operands=("I1", "I2", "O"),
+        operands=("I2",),
         port_alloc=(
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1668,11 +1670,12 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_3r_3w,
-        operands=("I1", "I2", "O"),
+        # operands=("I1", "I2", "O"),
+        operands=("I2",),
         port_alloc=(
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -2368,9 +2371,11 @@ if __name__ == "__main__":
                "resnet18": 1e+9/25}  # unit: ns (geo means geometric mean of mlperf-tiny workloads; resnet18's period is set to be same as resnet8.
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
+    # workloads = ["ae"]  # peak: macro-level peak  # options of workloads
     # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
     sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
+    # sram_sizes = [256 * 1024]  # unit: B
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
     pickle_exist = True  # read output directly if the output is saved in the last run
@@ -2399,7 +2404,7 @@ if __name__ == "__main__":
         # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
-        workload = "geo"
+        workload = "resnet8"
         sram_size = 256*1024
         i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
         assert workload in workloads, f"Legal workload: {workloads}"
@@ -2408,7 +2413,7 @@ if __name__ == "__main__":
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
         ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
+        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
         ## (2) [check] performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
@@ -2418,7 +2423,7 @@ if __name__ == "__main__":
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=False, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        # scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
         breakpoint()
 
         #######################
