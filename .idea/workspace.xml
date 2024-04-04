@@ -8,6 +8,7 @@
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/expr.py" beforeDir="false" afterPath="$PROJECT_DIR$/expr.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/zigzag/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/zigzag/classes/hardware/architecture/imc_unit.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/classes/hardware/architecture/imc_unit.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -29,7 +30,7 @@
   "keyToString": {
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "last_opened_file_path": "/users/micas/jsun/sunjc/codes/branch_for_updating_base_zigzag/base_zigzag_fork/debug.py"
+    "last_opened_file_path": "/users/micas/jsun/sunjc/codes/intel_project/zigzag_imc_version"
   }
 }]]></component>
   <component name="RunManager" selected="Python.expr">

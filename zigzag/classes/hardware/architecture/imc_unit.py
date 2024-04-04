@@ -1,5 +1,5 @@
 import math
-if __name__ == "__main__":
+if __name__ in ["__main__", "imc_unit"]:
     from get_cacti_cost import get_cacti_cost
 else:
     from zigzag.classes.hardware.architecture.get_cacti_cost import get_cacti_cost

@@ -1109,11 +1109,11 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
     ## For active plotting using plotly.express
     if active_plot:
         df["dim_str"] = df["dim"].astype(str)
-        df["sram_size_KB"] = df["sram_size"]/1024  # unit: B -> KB
+        df["sram_size_KB"] = (df["sram_size"]/1024).astype(str)  # unit: B -> KB
         ## Scenario: continuously active
         # fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type", hover_data={"acc_type","sram_size_KB", "dim"})
-        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type",
-                         hover_data={"acc_type", "sram_size", "dim"}, log_y=True, log_x=True)
+        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="sram_size_KB", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim"}, log_y=True, log_x=True)
         ## add marker style
         fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
                           selector=dict(mode='markers'))
@@ -1337,12 +1337,12 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_3r_3w,
-        # operands=("I1", "I2", "O"),
-        operands=("I2",),
+        operands=("I1", "I2", "O"),
+        # operands=("I2",),
         port_alloc=(
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1500,12 +1500,12 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_3r_3w,
-        # operands=("I1", "I2", "O"),
-        operands=("I2",),
+        operands=("I1", "I2", "O"),
+        # operands=("I2",),
         port_alloc=(
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1670,12 +1670,12 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
 
     memory_hierarchy_graph.add_memory(
         memory_instance=dram_3r_3w,
-        # operands=("I1", "I2", "O"),
-        operands=("I2",),
+        operands=("I1", "I2", "O"),
+        # operands=("I2",),
         port_alloc=(
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
             {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            # {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
         ),
         served_dimensions="all",
     )
@@ -1795,7 +1795,7 @@ def digital_array(dims):
 
     return multiplier_array, multiplier_energy
 
-def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6):  # 4 ms by default
+def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6, dram_size=1/1024):  # 4 ms by default
     #######################################################
     # This function is to calculate g, CO2 per operation for two scenarios: fixed-time and fixed-work.
     # Fixed-time scenario: assuming the design is fully activated during the entire lifetime.
@@ -1810,6 +1810,7 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
     # @para lifetime: lifetime of entire chip, unit: year
     # @para chip_yield: chip fabrication yield, range: float within (0, 1]
     # @para fixed_work_period: the period length for fixed-work scenario, unit: ns
+    # @para dram_size: utilized dram size. Unit: GB. Default: 1MB for all four tinyml perf workloads (ceiled from 571680 B, assuming 8b/weight)
     #######################################################
     assert 0 < chip_yield <= 1, f"yield {chip_yield} is not in range (0,1]"
     #################
@@ -1840,8 +1841,9 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
     chip_nbs = 1
     E_PKG = 0.15 * 1000 * chip_nbs * scale_factor  # g, CO2/chip * chip_nbs
     # External memory cost
-    # DRAM type: LPDDR3
-    CPS = 200 * ((28/30)**2)  # cabon-per-size factor: g, CO2/GB
+    # DRAM type: LPDDR3, SK hynix
+    # CPS data source: SK hynix. 2018. SK hynix Sustainability Report 2018: DBL, SKHynix's New Growth Strategy. https://www.skhynix.com/sustainability/UI-FR-SA1601
+    CPS = 230 * ((28/30)**2)  # cabon-per-size factor: g, CO2/GB
     dram_size = 1/1024  # 1MB for all four tinyml perf workloads (ceiled from 571680 B, assuming 8b/weight)
     E_DRAM = CPS * dram_size * scale_factor  # g, CO2
     # Total fabrication cost
@@ -1886,7 +1888,6 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
     # External memory cost
     # DRAM type: LPDDR3
     CPS = 200 * ((28 / 30) ** 2)  # cabon-per-size factor: g, CO2/GB
-    dram_size = 1 / 1024  # 1MB for all four tinyml perf workloads (ceiled from 571680 B, assuming 8b/weight)
     E_DRAM = CPS * dram_size * scale_factor  # g, CO2
     # Total fabrication cost
     E_CF = E_SOC + E_PKG + E_DRAM
@@ -1994,13 +1995,14 @@ def plot_area_trend_in_literature(data):
     plt.tight_layout()
     plt.show()
 
-def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str):
+def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str, dram_size: float):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
     # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
     # sram_sizes: int
     # Dimensions: int
     # periods: float
+    # @para dram_size: utilized dram size
     trig_time = time.time()
     data_vals = []
     os.system("rm -rf outputs/*")
@@ -2140,7 +2142,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         # below is for g, CO2/inference
                         cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
                             energy=en_total, lat=lat_total * tclk_total, area=area_total,
-                            nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload])
+                            nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload],
+                            dram_size=dram_size)
                         res = {
                             "workload": workload,
                             "acc_type": acc_type,
@@ -2374,8 +2377,9 @@ if __name__ == "__main__":
     # workloads = ["ae"]  # peak: macro-level peak  # options of workloads
     # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
+    sram_sizes = [32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
     # sram_sizes = [256 * 1024]  # unit: B
+    dram_size = 1/1024  # 1MB. unit: GB
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
     pickle_exist = True  # read output directly if the output is saved in the last run
@@ -2388,10 +2392,11 @@ if __name__ == "__main__":
         else:
             pkl_name = "expr_res.pkl"
         zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
-                                             Dimensions=Dimensions, periods=periods, pkl_name=pkl_name)
+                                             Dimensions=Dimensions, periods=periods, pkl_name=pkl_name,
+                                             dram_size=dram_size)
     else:
         ## Step 1: load df from pickle
-        df = read_pickle("no_cme_expr_res.pkl")
+        df = read_pickle("expr_res.pkl")
         workloads.append("geo")  # append geo so that plotting for geo is also supported
 
         ## Step 2:
@@ -2404,7 +2409,7 @@ if __name__ == "__main__":
         # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
-        workload = "resnet8"
+        workload = "ds_cnn"
         sram_size = 256*1024
         i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
         assert workload in workloads, f"Legal workload: {workloads}"
