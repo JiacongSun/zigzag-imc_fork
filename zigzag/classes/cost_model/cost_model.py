@@ -594,6 +594,13 @@ class CostModelEvaluation:
         core = self.accelerator.get_core(self.core_id)
         single_MAC_energy = core.operational_array.unit.cost
         self.MAC_energy = single_MAC_energy * self.layer.total_MAC_count
+        adders_energy = self.calc_adders_energy()
+        self.MAC_energy += adders_energy
+
+    def calc_adders_energy(self):
+        # tell if the dataflow is weight stationary or output stationary
+        breakpoint()
+        pass
 
     ## Computes the memories reading/writing energy by converting the access patterns in self.mapping to
     # energy breakdown using the memory hierarchy of the core on which the layer is mapped.

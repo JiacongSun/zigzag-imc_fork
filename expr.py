@@ -2410,7 +2410,7 @@ if __name__ == "__main__":
     # debug
     Dimensions = [32]
     workloads = ["ds_cnn"]
-    acc_types = ["AIMC"]
+    acc_types = ["pdigital_ws"]
     sram_sizes = [256*1024]
 
     if pickle_exist == False:
