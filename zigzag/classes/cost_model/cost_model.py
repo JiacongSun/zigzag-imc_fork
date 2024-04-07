@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, List, Tuple
-from math import ceil
+from math import ceil, log2
 import numpy as np
 
 from zigzag.classes.mapping.combined_mapping import Mapping
@@ -599,8 +599,119 @@ class CostModelEvaluation:
 
     def calc_adders_energy(self):
         # tell if the dataflow is weight stationary or output stationary
-        breakpoint()
-        pass
+        # add energy for weight stationary dataflow
+        lowest_mem_level = self.accelerator.cores[0].memory_hierarchy.mem_level_list[0]
+        served_mem_op = lowest_mem_level.operands[0]
+        served_layer_op = self.layer.get_layer_operand(served_mem_op)
+        output_layer_op = self.layer.output_operand
+        output_mem_op = self.layer.memory_operand_links[output_layer_op]
+        act_layer_op = [op for op in self.layer.input_operand_source.keys()][0]
+        if served_layer_op != output_layer_op:  # weight stationary
+            # calc number of macro activation times
+            macro_activation_counts = self.layer.total_MAC_count / self.mapping.spatial_mapping.unit_count["W"][0]
+            # calc number of active columns for each adder
+            mapped_act_dim = self.mapping.spatial_mapping.mapping_dict_origin[act_layer_op][0]
+            if self.is_nested_tuple(mapped_act_dim):
+                active_cols = 1
+                for ele in mapped_act_dim:
+                    active_cols *= ele[1]
+            else:
+                active_cols = mapped_act_dim[0][1]
+            # calc number of active inputs for each adder
+            mapped_output_dim = self.mapping.spatial_mapping.mapping_dict_origin[output_layer_op][0]
+            if self.is_nested_tuple(mapped_output_dim):
+                active_rows = 1
+                for ele in mapped_output_dim:
+                    active_rows *= ele[1]
+            else:
+                active_rows = mapped_output_dim[0][1]
+            # calc number of active macros
+            active_macros = self.mapping.spatial_mapping.unit_count["W"][0] / (active_cols * active_rows)
+            # calc total number of adder inputs
+            for mem_level in self.accelerator.cores[0].memory_hierarchy.mem_level_list:
+                if mem_level.operands[0] == output_mem_op:
+                    lowest_output_mem_level = mem_level
+                    break
+            nb_inputs_of_adder = lowest_output_mem_level.served_dimensions.pop().size
+            # get adder input precision
+            adder_input_pres = self.layer.operand_precision[output_layer_op]  # partial sum precision
+            # get 1b adder energy
+            nd2_cap = 0.7 / 1e3  # unit: pF
+            xor2_cap = 0.7 * 1.5 / 1e3  # unit: pF
+            vdd = 0.9  # unit: V
+            adder_energy_fa = (3 * nd2_cap + 2 * xor2_cap) * (vdd**2)  # unit: pJ
+            adder_energy_ha = (2 * xor2_cap) * (vdd ** 2)  # unit: pJ
+            # calc energy
+            adder_tree_energy = self.get_adder_trees_energy(adder_input_pres=adder_input_pres,
+                                                            nb_inputs_of_adder=nb_inputs_of_adder,
+                                                            mapped_inputs=active_rows,
+                                                            adder_energy_fa=adder_energy_fa,
+                                                            adder_energy_ha=adder_energy_ha,
+                                                            mapped_cols=active_cols,
+                                                            mapped_macros=active_macros,
+                                                            macro_activation_counts=macro_activation_counts)
+        return adder_tree_energy
+
+    def get_adder_trees_energy(self, adder_input_pres, nb_inputs_of_adder, mapped_inputs, adder_energy_fa, adder_energy_ha, mapped_cols, mapped_macros, macro_activation_counts):
+        """
+        get the energy spent on RCA adder trees for specific layer and mapping
+        """
+        adder_depth = log2(nb_inputs_of_adder)
+        assert nb_inputs_of_adder % 1 == 0, \
+            f"The number of inputs for an adder tree [{nb_inputs_of_adder}] is not in the power of 2."
+        adder_depth = int(adder_depth)  # float -> int for simplicity
+        adder_output_pres = adder_input_pres + adder_depth
+        nb_of_1b_adder = nb_inputs_of_adder * (adder_input_pres + 1) - (adder_input_pres + adder_depth + 1)  # nb of 1b adders in a single adder tree
+
+        # In the adders' model, we classify the basic FA (1-b full adder) as two types:
+        # 1. fully activated FA: two of its inputs having data comes in. (higher energy cost)
+        # 2. half activated FA: only one of its inputs having data comes in.
+        # The 2nd type has lower energy cost, because no carry will be generated and the carry path stays unchanged.
+        # Below we figure out how many there are of fully activated FA and half activated FA
+        if mapped_inputs >= 1:
+            if mapped_inputs >= nb_inputs_of_adder:
+                """
+                :param fully_activated_number_of_1b_adder: fully activated 1b adder, probably will produce a carry
+                :param half_activated_number_of_1b_adder: only 1 input is activate and the other port is 0, so carry path is activated.
+                """
+                fully_activated_number_of_1b_adder = nb_of_1b_adder
+                half_activated_number_of_1b_adder = 0
+            else:
+                """
+                find out fully_activated_number_of_1b_adder and half_activated_number_of_1b_adder when inputs are not fully mapped.
+                method: iteratively check if left_input is bigger or smaller than baseline, which will /2 each time, until left_input == 1
+                :param left_input: the number of inputs waiting for processing
+                :param baseline: serves as references for left_input
+                """
+                fully_activated_number_of_1b_adder = 0
+                half_activated_number_of_1b_adder = 0
+                left_input = mapped_inputs
+                baseline = nb_inputs_of_adder
+                while left_input != 0:
+                    baseline = baseline / 2
+                    activated_depth = int(log2(baseline))
+                    if left_input <= 1 and baseline == 1:  # special case
+                        fully_activated_number_of_1b_adder += 0
+                        half_activated_number_of_1b_adder += adder_input_pres
+                        left_input = 0
+                    elif left_input > baseline:
+                        fully_activated_number_of_1b_adder += baseline * (adder_input_pres + 1) - (adder_input_pres + activated_depth + 1) + (adder_input_pres + activated_depth)
+                        half_activated_number_of_1b_adder += 0
+                        left_input = left_input - baseline
+                    elif left_input < baseline:
+                        half_activated_number_of_1b_adder += adder_input_pres + activated_depth
+                    else:  # left_input == baseline
+                        fully_activated_number_of_1b_adder += baseline * (adder_input_pres + 1) - (adder_input_pres + activated_depth + 1)
+                        half_activated_number_of_1b_adder += adder_input_pres + activated_depth
+                        left_input = left_input - baseline
+
+            single_adder_tree_energy = fully_activated_number_of_1b_adder * adder_energy_fa + \
+                                       half_activated_number_of_1b_adder * adder_energy_ha
+            nb_of_activation_times = mapped_cols * mapped_macros * macro_activation_counts
+            energy_adders = single_adder_tree_energy * nb_of_activation_times
+        else:
+            energy_adders = 0
+        return energy_adders
 
     ## Computes the memories reading/writing energy by converting the access patterns in self.mapping to
     # energy breakdown using the memory hierarchy of the core on which the layer is mapped.
@@ -1395,3 +1506,12 @@ class CostModelEvaluation:
                 delattr(mul, attr)
 
         return mul
+
+    @staticmethod
+    def is_nested_tuple(obj):
+        if isinstance(obj, tuple):
+            for item in obj:
+                if isinstance(item, tuple):
+                    # If any item within the tuple is itself a tuple, it's a nested tuple
+                    return True
+        return False
