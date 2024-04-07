@@ -1801,7 +1801,7 @@ def digital_array(dims):
 
     return multiplier_array, multiplier_energy
 
-def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6, dram_size=1/1024):  # 4 ms by default
+def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6, dram_size=1/1024, dram_cost_removal=False):  # 4 ms by default
     #######################################################
     # This function is to calculate g, CO2 per operation for two scenarios: fixed-time and fixed-work.
     # Fixed-time scenario: assuming the design is fully activated during the entire lifetime.
@@ -1850,8 +1850,11 @@ def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_wor
     # DRAM type: LPDDR3, SK hynix
     # CPS data source: SK hynix. 2018. SK hynix Sustainability Report 2018: DBL, SKHynix's New Growth Strategy. https://www.skhynix.com/sustainability/UI-FR-SA1601
     CPS = 230 * ((28/30)**2)  # cabon-per-size factor: g, CO2/GB
-    dram_size = 1/1024  # 1MB for all four tinyml perf workloads (ceiled from 571680 B, assuming 8b/weight)
-    E_DRAM = CPS * dram_size * scale_factor  # g, CO2
+    if dram_cost_removal:
+        E_DRAM = 0
+    else:
+        # dram_size = 1/1024  # 1MB for all four tinyml perf workloads (ceiled from 571680 B, assuming 8b/weight)
+        E_DRAM = CPS * dram_size * scale_factor  # g, CO2
     # Total fabrication cost
     E_CF = E_SOC + E_PKG + E_DRAM
     # Total carbon cost, including operational cost and fabrication cost
@@ -2001,7 +2004,7 @@ def plot_area_trend_in_literature(data):
     plt.tight_layout()
     plt.show()
 
-def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str, dram_size: float, dram_ac_cost_per_bit: float):
+def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str, dram_size: float, dram_ac_cost_per_bit: float, possible_dram_energy_removal: bool, size_workloads: dict):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
     # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
@@ -2009,6 +2012,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     # Dimensions: int
     # periods: float
     # @para dram_size: utilized dram size
+    # @para dram_ac_cost_per_bit: dram access cost per bit (unit: pJ)
+    # @para possible_dram_energy_removal: remove dram energy cost if on-chip weight regs size > workload size
     trig_time = time.time()
     data_vals = []
     os.system("rm -rf outputs/*")
@@ -2124,6 +2129,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             dat = json.load(fp)
                         en_total = dat["outputs"]["energy"]["energy_total"]  # float: pJ
                         lat_total = dat["outputs"]["latency"]["computation"]  # float: cycles
+                        dram_cost_removal = False
                         if acc_type in ["AIMC", "DIMC"]:
                             area_total = dat["outputs"]["area (mm^2)"]["total_area"]  # float: mm2
                             tclk_total = dat["outputs"]["clock"]["tclk (ns)"]  # float: ns
@@ -2135,6 +2141,13 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             lat_bd = dat["outputs"]["latency"]["computation_breakdown"]
                             area_bd = dat["outputs"]["area (mm^2)"]["total_area_breakdown:"]
                             tclk_bd = dat["outputs"]["clock"]["tclk_breakdown (ns)"]
+                            if possible_dram_energy_removal:
+                                w_reg_size = np.prod([v for v in dims.values()])  # unit: weight element
+                                if w_reg_size >= size_workloads[workload]:
+                                    dram_energy = dat["outputs"]["energy"]["memory_energy_breakdown_per_level"]["W"][-1]
+                                    en_total = en_total - dram_energy
+                                    en_bd["mem"] = en_bd["mem"] - dram_energy
+                                    dram_cost_removal = True
                         else:
                             pe_array_area = accelerator.cores[0].operational_array.total_area
                             mem_area = np.sum(accelerator.cores[0].memory_level_area)
@@ -2150,7 +2163,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
                             energy=en_total, lat=lat_total * tclk_total, area=area_total,
                             nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload],
-                            dram_size=dram_size)
+                            dram_size=dram_size, dram_cost_removal=dram_cost_removal)
                         res = {
                             "workload": workload,
                             "acc_type": acc_type,
@@ -2388,9 +2401,17 @@ if __name__ == "__main__":
     # sram_sizes = [256 * 1024]  # unit: B
     dram_size = 1/1024  # 1MB. unit: GB
     dram_ac_cost_per_bit = 10.9375  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
+    possible_dram_energy_removal = True
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
-    pickle_exist = True  # read output directly if the output is saved in the last run
+    size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
+    pickle_exist = False  # read output directly if the output is saved in the last run
+
+    # debug
+    Dimensions = [32]
+    workloads = ["ds_cnn"]
+    acc_types = ["AIMC"]
+    sram_sizes = [256*1024]
 
     if pickle_exist == False:
         #########################################
@@ -2401,7 +2422,9 @@ if __name__ == "__main__":
             pkl_name = "expr_res.pkl"
         zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
                                              Dimensions=Dimensions, periods=periods, pkl_name=pkl_name,
-                                             dram_size=dram_size, dram_ac_cost_per_bit=dram_ac_cost_per_bit)
+                                             dram_size=dram_size, dram_ac_cost_per_bit=dram_ac_cost_per_bit,
+                                             possible_dram_energy_removal=possible_dram_energy_removal,
+                                             size_workloads=size_workloads)
     else:
         ## Step 1: load df from pickle
         df = read_pickle("expr_res.pkl")
