@@ -941,7 +941,7 @@ def plot_performance_bar(i_df, acc_types: list, workload: str, sram_size=256*102
     tclk_bar.set_ylabel(f"Tclk [ns] ({workload})", fontsize=font_size)
     area_bar.set_ylabel(f"Area [mm$^2$] ({workload})", fontsize=font_size)
     time_bar.set_ylabel(f"Inference time [ns] ({workload})", fontsize=font_size)
-    log_area_bar.set_ylabel(f"Area [mm$^2$] ({workload})", fontsize=font_size)
+    log_area_bar.set_ylabel(f"Area [log(mm$^2$)] ({workload})", fontsize=font_size)
     log_area_bar.set_yscale("log")
 
     plt.tight_layout()
@@ -2441,6 +2441,11 @@ if __name__ == "__main__":
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
     size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
     pickle_exist = True  # read output directly if the output is saved in the last run
+
+    # debug
+    Dimensions = [512, 1024]
+    workloads = ["ds_cnn"]
+    pickle_exist = False
 
     if pickle_exist == False:
         #########################################
