@@ -2440,12 +2440,13 @@ if __name__ == "__main__":
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
     size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
-    pickle_exist = True  # read output directly if the output is saved in the last run
+    pickle_exist = False  # read output directly if the output is saved in the last run
 
     # debug
-    Dimensions = [512, 1024]
-    workloads = ["ds_cnn"]
-    pickle_exist = False
+    # Dimensions = [512]
+    # workloads = ["ds_cnn"]
+    # acc_types = ["pdigital_ws", "DIMC"]
+    # pickle_exist = False
 
     if pickle_exist == False:
         #########################################

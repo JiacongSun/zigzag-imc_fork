@@ -625,10 +625,21 @@ class CostModelEvaluation:
             active_col_counts = active_cols_mapping[1]
         active_macros = self.mapping.spatial_mapping.unit_count["W"][0] / (active_row_counts * active_col_counts)
         macro_activation_counts = self.layer.total_MAC_count / self.mapping.spatial_mapping.unit_count["W"][0]
+        # tell if the dataflow is weight stationary or output stationary
+        lowest_mem_level = self.accelerator.cores[0].memory_hierarchy.mem_level_list[0]
+        served_mem_op = lowest_mem_level.operands[0]
+        served_layer_op = self.layer.get_layer_operand(served_mem_op)
+        output_layer_op = self.layer.output_operand
         mult_counts = macro_activation_counts * active_macros * \
-                      (
-                                  active_row_counts * total_col_counts + active_col_counts * total_row_counts - active_row_counts * active_col_counts)
-        mult_energy = single_MAC_energy * mult_counts
+                      (active_row_counts * active_col_counts)
+        if served_layer_op == output_layer_op:  # output stationary
+            half_mult_counts = macro_activation_counts * active_macros * \
+                      (active_row_counts * total_col_counts + active_col_counts * total_row_counts - 2 * active_row_counts * active_col_counts)
+        else:  # weight stationary
+            half_mult_counts = macro_activation_counts * active_macros * \
+                      (active_row_counts * (total_col_counts - active_col_counts))
+        mult_energy = single_MAC_energy * mult_counts + 0.5 * single_MAC_energy * half_mult_counts
+        # mult_energy = single_MAC_energy * self.layer.total_MAC_count
         adders_energy = self.calc_adders_energy()
         self.MAC_energy = adders_energy + mult_energy
 
@@ -855,17 +866,18 @@ class CostModelEvaluation:
     # data size, taking into account the memory sharing between operands.
     def calc_double_buffer_flag(self):
         double_buffer_true = {}
+        output_layer_op = self.layer.output_operand
         for layer_op in self.layer.operand_list:
             mem_op = self.layer_op_to_mem_op[layer_op]
             """ start with False for each operand at the lowest arch level (MAC array level) """
             double_buffer_true[layer_op] = [False]
             for mem_lv in range(0, self.mapping_int.mem_level[layer_op]):
-                if self.effective_mem_utili_shared[layer_op][mem_lv] <= 0.5:
+                if self.effective_mem_utili_shared[layer_op][mem_lv] <= 0.5 and (layer_op != output_layer_op):
                     double_buffer_true[layer_op].append(True)
                 elif (
                         self.effective_mem_utili_individual[layer_op][mem_lv]
                         <= 1 - self.effective_mem_utili_shared[layer_op][mem_lv]
-                ):
+                ) and (layer_op != output_layer_op):
                     double_buffer_true[layer_op].append(True)
                     shared_mem_list = get_shared_mem_list(
                         mem_op, mem_lv, self.mem_sharing_list
