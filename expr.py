@@ -2442,12 +2442,6 @@ if __name__ == "__main__":
     size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
     pickle_exist = False  # read output directly if the output is saved in the last run
 
-    # debug
-    Dimensions = [32]
-    workloads = ["ds_cnn"]
-    acc_types = ["pdigital_ws"]
-    sram_sizes = [256*1024]
-
     if pickle_exist == False:
         #########################################
         ## Simulation
