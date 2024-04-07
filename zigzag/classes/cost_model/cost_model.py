@@ -606,7 +606,9 @@ class CostModelEvaluation:
         output_layer_op = self.layer.output_operand
         output_mem_op = self.layer.memory_operand_links[output_layer_op]
         act_layer_op = [op for op in self.layer.input_operand_source.keys()][0]
-        if served_layer_op != output_layer_op:  # weight stationary
+        if served_layer_op == output_layer_op:  # output stationary
+            adder_tree_energy = 0
+        else:  # weight stationary
             # calc number of macro activation times
             macro_activation_counts = self.layer.total_MAC_count / self.mapping.spatial_mapping.unit_count["W"][0]
             # calc number of active columns for each adder

@@ -2432,15 +2432,15 @@ if __name__ == "__main__":
     # workloads = ["ae"]  # peak: macro-level peak  # options of workloads
     # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    sram_sizes = [32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
-    # sram_sizes = [256 * 1024]  # unit: B
+    # sram_sizes = [16 * 1024, 32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
+    sram_sizes = [256 * 1024]  # unit: B
     dram_size = 1/1024  # 1MB. unit: GB
     dram_ac_cost_per_bit = 10.9375  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
     possible_dram_energy_removal = True
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
     size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
-    pickle_exist = False  # read output directly if the output is saved in the last run
+    pickle_exist = True  # read output directly if the output is saved in the last run
 
     if pickle_exist == False:
         #########################################
