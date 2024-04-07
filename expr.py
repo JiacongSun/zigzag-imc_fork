@@ -1701,8 +1701,9 @@ def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, wo
         imc_array = ImcArray(tech_param, hd_param, dims)
         mem_hier = memory_hierarchy_dut_for_imc(imc_array, sram_size=sram_size, dram_size=dram_size,
                                                 dram_ac_cost_per_bit=dram_ac_cost_per_bit)
+        pe_area_total = 0  # no use parameter for IMC
     else:
-        parray, multiplier_energy = digital_array(dims)
+        parray, multiplier_energy, pe_area_total = digital_array(acc_type, dims)
         if acc_type == "pdigital_ws":
             mem_hier = memory_hierarchy_dut_for_pdigital_ws(parray, sram_size=sram_size, dram_size=dram_size,
                                                             dram_ac_cost_per_bit=dram_ac_cost_per_bit)
@@ -1715,7 +1716,7 @@ def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, wo
     acc_name = os.path.basename(__file__)[:-3]
     accelerator = Accelerator(acc_name, core)
 
-    return accelerator
+    return accelerator, pe_area_total
 
 def get_imc_param_setting(acc_type="DIMC", D1=32, D2=32, D3=1):
     ## type: pdigital, DIMC or AIMC
@@ -1784,7 +1785,7 @@ def get_imc_param_setting(acc_type="DIMC", D1=32, D2=32, D3=1):
     ## return para
     return tech_param_28nm, hd_param, dimensions
 
-def digital_array(dims):
+def digital_array(acc_type, dims):
     # Data is from envision paper (https://ieeexplore.ieee.org/abstract/document/7870353)
     # Tech: 28nm UTBB FD-SOI
     # PE array area is estimated from the chip picture, with total size: 0.75mm x 1.29mm for 16 x 16 int16 PEs
@@ -1794,12 +1795,39 @@ def digital_array(dims):
     multiplier_input_precision = [8, 8]
     multiplier_energy = 0.25  # unit: pJ/mac
     multiplier_area = 0.75*1.29/256/4  # mm2/PE
+    area_total = multiplier_area * np.prod([dim for dim in dims.values()])
     multiplier = Multiplier(
         multiplier_input_precision, multiplier_energy, multiplier_area
     )
     multiplier_array = MultiplierArray(multiplier, dims)
+    if acc_type in ["pdigital_ws"]:
+        # add adder area
+        nd2_area = 0.614 / 1e6  # unit: mm^2
+        xor2_area = 0.614 * 2.4 / 1e6  # unit: mm^2
+        adder_area_fa = 3 * nd2_area + 2 * xor2_area
+        adder_input_pres = np.prod(multiplier_input_precision)
+        nb_inputs_of_adder = dims["D2"]
+        adder_depth = math.log2(nb_inputs_of_adder)
+        nb_of_1b_adder = nb_inputs_of_adder * (adder_input_pres + 1) - (adder_input_pres + adder_depth + 1)
+        single_adder_tree_area = adder_area_fa * nb_of_1b_adder
+        adder_tree_counts = dims["D2"] * dims["D3"]
+        total_adder_tree_area = single_adder_tree_area * adder_tree_counts
+        area_total += total_adder_tree_area
 
-    return multiplier_array, multiplier_energy
+    return multiplier_array, multiplier_energy, area_total
+
+def adder_tree_delay(dims, adder_output_pres):
+    nd2_dly = 0.0478  # unit: ns
+    xor2_dly = 0.0478 * 2.4  # unit: ns
+    nb_inputs_of_adder = dims["D2"]
+    adder_dly_in2sum = 2 * xor2_dly
+    adder_dly_in2cout = xor2_dly + 2 * nd2_dly
+    adder_dly_cin2cout = 2 * nd2_dly
+    adder_depth = math.log2(nb_inputs_of_adder)
+    dly_adders = (adder_depth - 1) * adder_dly_in2sum + \
+                 adder_dly_in2cout + \
+                 (adder_output_pres - 1 - 1) * adder_dly_cin2cout
+    return dly_adders
 
 def calc_cf(energy, lat, area, nb_of_ops, lifetime=3, chip_yield=0.95, fixed_work_period=4e+6, dram_size=1/1024, dram_cost_removal=False):  # 4 ms by default
     #######################################################
@@ -2004,7 +2032,9 @@ def plot_area_trend_in_literature(data):
     plt.tight_layout()
     plt.show()
 
-def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str, dram_size: float, dram_ac_cost_per_bit: float, possible_dram_energy_removal: bool, size_workloads: dict):
+def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict,
+                                         pkl_name: str, dram_size: float, dram_ac_cost_per_bit: float,
+                                         possible_dram_energy_removal: bool, size_workloads: dict):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
     # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
@@ -2037,11 +2067,13 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             nb_of_ops = np.prod([x for x in dims.values()]) * hd_param["input_bit_per_cycle"] / hd_param[
                                 "input_precision"] * 2
                         else:  # acc_type == "pdigital_ws" or "pdigital_os"
-                            parray, multiplier_energy = digital_array(dims)
-                            area_total = parray.total_area  # mm2
+                            parray, multiplier_energy, area_total = digital_array(acc_type, dims)
                             area_bd = {"pe": area_total}
                             tclk_bd = {"pe": 5}  # ns
                             tclk_total = 5  # ns
+                            if acc_type in ["pdigital_ws"]:
+                                additional_tclk = adder_tree_delay(dims=dims, adder_output_pres=16)
+                                tclk_total += additional_tclk
                             peak_en_bd = {"pe": multiplier_energy * np.prod(parray.dimension_sizes)}
                             peak_en_total = np.prod(parray.dimension_sizes)  # pJ
                             nb_of_ops = np.prod(parray.dimension_sizes) * 2
@@ -2105,7 +2137,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                     "spatial_mapping_hint": {"D1": ["K"], "D2": ["C", "FX", "FY"]},
                                 }
                             }
-                        accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload,
+                        accelerator, pe_area_total = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload,
                                                       dram_ac_cost_per_bit)
 
                         # Call API
@@ -2149,10 +2181,13 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                     en_bd["mem"] = en_bd["mem"] - dram_energy
                                     dram_cost_removal = True
                         else:
-                            pe_array_area = accelerator.cores[0].operational_array.total_area
+                            # pe_array_area = accelerator.cores[0].operational_array.total_area  # only multipliers, no adders
                             mem_area = np.sum(accelerator.cores[0].memory_level_area)
-                            area_total = pe_array_area + mem_area  # mm2
+                            area_total = pe_area_total + mem_area  # mm2
                             tclk_total = 5  # ns
+                            if acc_type in ["pdigital_ws"]:
+                                additional_tclk = adder_tree_delay(dims=dims, adder_output_pres=16)
+                                tclk_total += additional_tclk
                             en_bd = {}
                             lat_bd = {}
                             area_bd = {}

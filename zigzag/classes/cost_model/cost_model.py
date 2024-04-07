@@ -610,16 +610,20 @@ class CostModelEvaluation:
             # calc number of macro activation times
             macro_activation_counts = self.layer.total_MAC_count / self.mapping.spatial_mapping.unit_count["W"][0]
             # calc number of active columns for each adder
-            mapped_act_dim = self.mapping.spatial_mapping.mapping_dict_origin[act_layer_op][0]
-            if self.is_nested_tuple(mapped_act_dim):
+            mapped_act_dim = tuple(self.mapping.spatial_mapping.mapping_dict_origin[act_layer_op][0])
+            if len(mapped_act_dim) == 0:
+                active_cols = 1
+            elif self.is_nested_tuple(mapped_act_dim):
                 active_cols = 1
                 for ele in mapped_act_dim:
                     active_cols *= ele[1]
             else:
                 active_cols = mapped_act_dim[0][1]
             # calc number of active inputs for each adder
-            mapped_output_dim = self.mapping.spatial_mapping.mapping_dict_origin[output_layer_op][0]
-            if self.is_nested_tuple(mapped_output_dim):
+            mapped_output_dim = tuple(self.mapping.spatial_mapping.mapping_dict_origin[output_layer_op][0])
+            if len(mapped_output_dim) == 0:
+                active_rows = 1
+            elif self.is_nested_tuple(mapped_output_dim):
                 active_rows = 1
                 for ele in mapped_output_dim:
                     active_rows *= ele[1]
@@ -632,7 +636,7 @@ class CostModelEvaluation:
                 if mem_level.operands[0] == output_mem_op:
                     lowest_output_mem_level = mem_level
                     break
-            nb_inputs_of_adder = lowest_output_mem_level.served_dimensions.pop().size
+            nb_inputs_of_adder = sorted(lowest_output_mem_level.served_dimensions)[0].size
             # get adder input precision
             adder_input_pres = self.layer.operand_precision[output_layer_op]  # partial sum precision
             # get 1b adder energy
@@ -1380,6 +1384,9 @@ class CostModelEvaluation:
             "calc_memory_word_access",
             "combine_data_transfer_rate_per_physical_port",
             "run",
+            "calc_adders_energy",
+            "get_adder_trees_energy",
+            "is_nested_tuple",
         ]
         add_attr = [
             "MAC_energy",
@@ -1478,6 +1485,9 @@ class CostModelEvaluation:
             "calc_memory_word_access",
             "combine_data_transfer_rate_per_physical_port",
             "run",
+            "calc_adders_energy",
+            "get_adder_trees_energy",
+            "is_nested_tuple",
         ]
         mul_attr = [
             "MAC_energy",
