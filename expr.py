@@ -1191,12 +1191,13 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
         plt.tight_layout()
         plt.show()
 
-def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
+def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024, dram_ac_cost_per_bit=3.7):
     # This function defines the memory hierarchy in the hardware template.
     # @para parray: digital pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
     # @para dram_size: define the off-chip dram size, unit: byte
+    # @para dram_ac_cost_per_bit: dram access cost per bit, unit: pJ
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
 
@@ -1272,7 +1273,7 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
 
     # dram_size = 1*1024*1024*1024 # unit: byte
     # dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
-    dram_ac_cost_per_bit = 3.7  # unit: pJ/bit
+    # dram_ac_cost_per_bit = 3.7  # unit: pJ/bit
     dram_bw = parray.dimension_sizes[0] * 8 * parray.dimension_sizes[2]
     dram_3r_3w = MemoryInstance(
         name="dram_1GB",
@@ -1355,12 +1356,13 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
+def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024, dram_ac_cost_per_bit=3.7):
     # This function defines the memory hierarchy in the hardware template.
     # @para parray: digital pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
     # @para dram_size: define the off-chip dram size, unit: byte
+    # @para dram_ac_cost_per_bit: dram access cost per bit, unit: pJ
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
 
@@ -1437,7 +1439,7 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
 
     # dram_size = 1*1024*1024*1024 # unit: byte
     # dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
-    dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
+    # dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
     dram_bw = parray.dimension_sizes[0] * 8 * parray.dimension_sizes[2]
     dram_3r_3w = MemoryInstance(
         name="dram_1GB",
@@ -1518,12 +1520,13 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024):
+def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024, dram_ac_cost_per_bit=3.7):
     # This function defines the memory hierarchy in the hardware template.
     # @para imc_array: imc pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
     # @para dram_size: define the off-chip dram size, unit: byte
+    # @para dram_ac_cost_per_bit: dram access cost per bit, unit: pJ
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
     tech_param = imc_array.unit.logic_unit.tech_param
@@ -1607,7 +1610,7 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
 
     # dram_size = 1*1024*1024*1024 # unit: byte
     # dram_size = 1 * 1024 * 1024  # unit: byte (change to 1MB to fit for carbon estimation for tinyml perf workloads)
-    dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
+    # dram_ac_cost_per_bit = 3.7 # unit: pJ/bit
     dram_bw = imc_array.unit.wl_dim_size * hd_param["weight_precision"] * imc_array.unit.nb_of_banks
     dram_3r_3w = MemoryInstance(
         name="dram_1GB",
@@ -1688,7 +1691,7 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, workload="resnet8"):
+def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, workload="resnet8", dram_ac_cost_per_bit=3.7):
     assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
     if workload == "resnet18":
         dram_size = 15 * 1024 * 1024  # 12 MB for resnet18
@@ -1696,13 +1699,16 @@ def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, wo
         dram_size = 1 * 1024 * 1024  # 1 MB for Mlperf Tiny workloads
     if acc_type in ["AIMC", "DIMC"]:
         imc_array = ImcArray(tech_param, hd_param, dims)
-        mem_hier = memory_hierarchy_dut_for_imc(imc_array, sram_size=sram_size, dram_size=dram_size)
+        mem_hier = memory_hierarchy_dut_for_imc(imc_array, sram_size=sram_size, dram_size=dram_size,
+                                                dram_ac_cost_per_bit=dram_ac_cost_per_bit)
     else:
         parray, multiplier_energy = digital_array(dims)
         if acc_type == "pdigital_ws":
-            mem_hier = memory_hierarchy_dut_for_pdigital_ws(parray, sram_size=sram_size, dram_size=dram_size)
+            mem_hier = memory_hierarchy_dut_for_pdigital_ws(parray, sram_size=sram_size, dram_size=dram_size,
+                                                            dram_ac_cost_per_bit=dram_ac_cost_per_bit)
         else:
-            mem_hier = memory_hierarchy_dut_for_pdigital_os(parray, sram_size=sram_size, dram_size=dram_size)
+            mem_hier = memory_hierarchy_dut_for_pdigital_os(parray, sram_size=sram_size, dram_size=dram_size,
+                                                            dram_ac_cost_per_bit=dram_ac_cost_per_bit)
         imc_array = parray
 
     core = {Core(1, imc_array, mem_hier)}
@@ -1995,7 +2001,7 @@ def plot_area_trend_in_literature(data):
     plt.tight_layout()
     plt.show()
 
-def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str, dram_size: float):
+def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict, pkl_name: str, dram_size: float, dram_ac_cost_per_bit: float):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
     # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
@@ -2094,7 +2100,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                     "spatial_mapping_hint": {"D1": ["K"], "D2": ["C", "FX", "FY"]},
                                 }
                             }
-                        accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload)
+                        accelerator = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload,
+                                                      dram_ac_cost_per_bit)
 
                         # Call API
                         hw_name = acc_type
@@ -2380,6 +2387,7 @@ if __name__ == "__main__":
     sram_sizes = [32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
     # sram_sizes = [256 * 1024]  # unit: B
     dram_size = 1/1024  # 1MB. unit: GB
+    dram_ac_cost_per_bit = 10.9375  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
     ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
     pickle_exist = True  # read output directly if the output is saved in the last run
@@ -2393,7 +2401,7 @@ if __name__ == "__main__":
             pkl_name = "expr_res.pkl"
         zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
                                              Dimensions=Dimensions, periods=periods, pkl_name=pkl_name,
-                                             dram_size=dram_size)
+                                             dram_size=dram_size, dram_ac_cost_per_bit=dram_ac_cost_per_bit)
     else:
         ## Step 1: load df from pickle
         df = read_pickle("expr_res.pkl")
