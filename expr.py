@@ -881,7 +881,7 @@ def plot_performance_bar(i_df, acc_types: list, workload: str, sram_size=256*102
                             edgecolor="black")
             # Plot area
             t_area = dff.t_area.to_numpy()  # series: mm2
-            mem_area = np.array([x["mem_area"] for x in df[df.acc_type=="DIMC"].area])
+            mem_area = np.array([x["mem_area"] for x in dff.area])
             pe_area = t_area - mem_area
             base = [0 for x in range(0, len(labels))]
             val = pe_area
@@ -2147,6 +2147,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             wl_name = re.split(r"/|\.", workload_dir)[-2]
                         experiment_id = f"{hw_name}-{wl_name}"
                         cmes_pkl_name = f"{experiment_id}-saved_list_of_cmes"
+                        os.system(f"rm -rf outputs/{experiment_id}-layer_overall_complete.json")
 
                         ans = get_hardware_performance_zigzag(
                             workload_dir,
@@ -2170,7 +2171,10 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                 "array": dat["outputs"]["energy"]["operational_energy"],  # pJ
                                 "mem": dat["outputs"]["energy"]["memory_energy"],  # pJ
                             }
-                            lat_bd = dat["outputs"]["latency"]["computation_breakdown"]
+                            lat_bd = {
+                                "mac_computation": dat["outputs"]["latency"]["computation_breakdown"]["mac_computation"],
+                                "mem_stalling": dat["outputs"]["latency"]["computation_breakdown"]["weight_loading"],
+                            }
                             area_bd = dat["outputs"]["area (mm^2)"]["total_area_breakdown:"]
                             tclk_bd = dat["outputs"]["clock"]["tclk_breakdown (ns)"]
                             if possible_dram_energy_removal:
@@ -2184,14 +2188,24 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             # pe_array_area = accelerator.cores[0].operational_array.total_area  # only multipliers, no adders
                             mem_area = np.sum(accelerator.cores[0].memory_level_area)
                             area_total = pe_area_total + mem_area  # mm2
-                            tclk_total = 5  # ns
+                            tclk_mac = 5  # ns
                             if acc_type in ["pdigital_ws"]:
                                 additional_tclk = adder_tree_delay(dims=dims, adder_output_pres=16)
-                                tclk_total += additional_tclk
-                            en_bd = {}
-                            lat_bd = {}
-                            area_bd = {}
-                            tclk_bd = {}
+                                tclk_total = additional_tclk + tclk_mac
+                            else:
+                                additional_tclk = 0
+                                tclk_total = tclk_mac
+                            en_bd = {
+                                "array": dat["outputs"]["energy"]["operational_energy"],  # pJ
+                                "mem": dat["outputs"]["energy"]["memory_energy"],  # pJ
+                            }
+                            lat_bd = {
+                                "mac_computation": dat["outputs"]["latency"]["computation_breakdown"][
+                                    "mac_computation"],
+                                "mem_stalling": dat["outputs"]["latency"]["computation_breakdown"]["mem_stalling"],
+                            }
+                            area_bd = {"mem_area": mem_area, "pe_area": pe_area_total}
+                            tclk_bd = {"mac": tclk_mac, "additional_tclk": additional_tclk}
                         # calc CF (carbon footprint) (below is for g, CO2/op)
                         # cf_total, cf_bd = calc_cf(energy=en_total, lat=lat_total*tclk_total, area=area_total, nb_of_ops=ops_workloads[workload], lifetime=3, chip_yield=0.95)
                         # below is for g, CO2/inference
@@ -2428,24 +2442,24 @@ if __name__ == "__main__":
     periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25, "geo":1e+9/((1*10*0.75*25)**0.25),
                "resnet18": 1e+9/25}  # unit: ns (geo means geometric mean of mlperf-tiny workloads; resnet18's period is set to be same as resnet8.
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
-    workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
-    # workloads = ["ae"]  # peak: macro-level peak  # options of workloads
+    # workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
+    workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
     # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    # sram_sizes = [16 * 1024, 32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
-    sram_sizes = [256 * 1024]  # unit: B
+    sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
+    # sram_sizes = [256 * 1024]  # unit: B
     dram_size = 1/1024  # 1MB. unit: GB
-    dram_ac_cost_per_bit = 10.9375  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
-    possible_dram_energy_removal = True
+    dram_ac_cost_per_bit = 80.3  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
+    possible_dram_energy_removal = True  # remove dram energy cost if on-chip weight mem size > workload size, only for weight-stationary dataflow
     # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
-    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}   # exclude batch and relu
+    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}  # exclude batch and relu
     size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
     pickle_exist = False  # read output directly if the output is saved in the last run
 
     # debug
     # Dimensions = [512]
     # workloads = ["ds_cnn"]
-    # acc_types = ["pdigital_ws", "DIMC"]
+    acc_types = ["DIMC"]
     # pickle_exist = False
 
     if pickle_exist == False:
@@ -2485,6 +2499,7 @@ if __name__ == "__main__":
                                    "different to each other."
         ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
         plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
+        breakpoint()
         ## (2) [check] performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
@@ -2492,9 +2507,9 @@ if __name__ == "__main__":
         # plot_carbon_breakdown_in_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
         ## (4) plot carbon comparison across 4 scenarios
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
-        # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=50, raw_data=raw_data, plot_breakdown=False, d1_equal_d2=True)
+        # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=13, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        # scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
         breakpoint()
 
         #######################

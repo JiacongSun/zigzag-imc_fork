@@ -282,6 +282,10 @@ class CostModelEvaluation:
 
     # JSON representation used for saving this object to a json file.
     def __jsonrepr__(self):
+        computation_breakdown = {
+            "mac_computation": self.ideal_temporal_cycle,
+            "mem_stalling": self.SS_comb,
+        }
         return {
             "outputs": {
                 "memory": {
@@ -301,6 +305,7 @@ class CostModelEvaluation:
                     "data_onloading": self.latency_total1 - self.latency_total0,
                     "computation": self.latency_total0,
                     "data_offloading": self.latency_total2 - self.latency_total1,
+                    "computation_breakdown": computation_breakdown,
                 },
                 "spatial": {
                     "mac_utilization": {
@@ -590,56 +595,57 @@ class CostModelEvaluation:
         self.calc_memory_energy_cost()
 
     ## Calculate the dynamic MAC energy
-    def calc_MAC_energy_cost(self):
+    def calc_MAC_energy_cost(self, gating_used=False):
         core = self.accelerator.get_core(self.core_id)
         single_MAC_energy = core.operational_array.unit.cost
+        if not gating_used:
+            # calc activate multipliers
+            total_col_counts = self.accelerator.cores[0].operational_array.dimension_sizes[0]
+            total_row_counts = self.accelerator.cores[0].operational_array.dimension_sizes[1]
+            try:
+                active_rows_mapping = self.layer.user_spatial_mapping["D1"]
+            except KeyError:  # D1 has no spatial loop
+                active_rows_mapping = None
+            try:
+                active_cols_mapping = self.layer.user_spatial_mapping["D2"]
+            except KeyError:  # D2 has no spatial loop
+                active_cols_mapping = None
 
-        # calc activate multipliers
-        total_col_counts = self.accelerator.cores[0].operational_array.dimension_sizes[0]
-        total_row_counts = self.accelerator.cores[0].operational_array.dimension_sizes[1]
-        try:
-            active_rows_mapping = self.layer.user_spatial_mapping["D1"]
-        except KeyError:  # D1 has no spatial loop
-            active_rows_mapping = None
-        try:
-            active_cols_mapping = self.layer.user_spatial_mapping["D2"]
-        except KeyError:  # D2 has no spatial loop
-            active_cols_mapping = None
+            if active_rows_mapping is None:
+                active_row_counts = 1
+            elif self.is_nested_tuple(active_rows_mapping):
+                active_row_counts = 1
+                for ele in active_rows_mapping:
+                    active_row_counts *= ele[1]
+            else:
+                active_row_counts = active_rows_mapping[1]
 
-        if active_rows_mapping is None:
-            active_row_counts = 1
-        elif self.is_nested_tuple(active_rows_mapping):
-            active_row_counts = 1
-            for ele in active_rows_mapping:
-                active_row_counts *= ele[1]
+            if active_cols_mapping is None:
+                active_col_counts = 1
+            elif self.is_nested_tuple(active_cols_mapping):
+                active_col_counts = 1
+                for ele in active_cols_mapping:
+                    active_col_counts *= ele[1]
+            else:
+                active_col_counts = active_cols_mapping[1]
+            active_macros = self.mapping.spatial_mapping.unit_count["W"][0] / (active_row_counts * active_col_counts)
+            macro_activation_counts = self.layer.total_MAC_count / self.mapping.spatial_mapping.unit_count["W"][0]
+            # tell if the dataflow is weight stationary or output stationary
+            lowest_mem_level = self.accelerator.cores[0].memory_hierarchy.mem_level_list[0]
+            served_mem_op = lowest_mem_level.operands[0]
+            served_layer_op = self.layer.get_layer_operand(served_mem_op)
+            output_layer_op = self.layer.output_operand
+            mult_counts = macro_activation_counts * active_macros * \
+                          (active_row_counts * active_col_counts)
+            if served_layer_op == output_layer_op:  # output stationary
+                half_mult_counts = macro_activation_counts * active_macros * \
+                          (active_row_counts * total_col_counts + active_col_counts * total_row_counts - 2 * active_row_counts * active_col_counts)
+            else:  # weight stationary
+                half_mult_counts = macro_activation_counts * active_macros * \
+                          (active_row_counts * (total_col_counts - active_col_counts))
+            mult_energy = single_MAC_energy * mult_counts + 0.5 * single_MAC_energy * half_mult_counts
         else:
-            active_row_counts = active_rows_mapping[1]
-
-        if active_cols_mapping is None:
-            active_col_counts = 1
-        elif self.is_nested_tuple(active_cols_mapping):
-            active_col_counts = 1
-            for ele in active_cols_mapping:
-                active_col_counts *= ele[1]
-        else:
-            active_col_counts = active_cols_mapping[1]
-        active_macros = self.mapping.spatial_mapping.unit_count["W"][0] / (active_row_counts * active_col_counts)
-        macro_activation_counts = self.layer.total_MAC_count / self.mapping.spatial_mapping.unit_count["W"][0]
-        # tell if the dataflow is weight stationary or output stationary
-        lowest_mem_level = self.accelerator.cores[0].memory_hierarchy.mem_level_list[0]
-        served_mem_op = lowest_mem_level.operands[0]
-        served_layer_op = self.layer.get_layer_operand(served_mem_op)
-        output_layer_op = self.layer.output_operand
-        mult_counts = macro_activation_counts * active_macros * \
-                      (active_row_counts * active_col_counts)
-        if served_layer_op == output_layer_op:  # output stationary
-            half_mult_counts = macro_activation_counts * active_macros * \
-                      (active_row_counts * total_col_counts + active_col_counts * total_row_counts - 2 * active_row_counts * active_col_counts)
-        else:  # weight stationary
-            half_mult_counts = macro_activation_counts * active_macros * \
-                      (active_row_counts * (total_col_counts - active_col_counts))
-        mult_energy = single_MAC_energy * mult_counts + 0.5 * single_MAC_energy * half_mult_counts
-        # mult_energy = single_MAC_energy * self.layer.total_MAC_count
+            mult_energy = single_MAC_energy * self.layer.total_MAC_count
         adders_energy = self.calc_adders_energy()
         self.MAC_energy = adders_energy + mult_energy
 
@@ -1399,6 +1405,7 @@ class CostModelEvaluation:
         sum.data_offloading_cycle += other.data_offloading_cycle
         sum.ideal_cycle += other.ideal_cycle
         sum.ideal_temporal_cycle += other.ideal_temporal_cycle
+        sum.SS_comb += other.SS_comb
         sum.latency_total0 += other.latency_total0
         sum.latency_total1 += other.latency_total1
         sum.latency_total2 += other.latency_total2
@@ -1452,6 +1459,7 @@ class CostModelEvaluation:
             "data_offloading_cycle",
             "ideal_cycle",
             "ideal_temporal_cycle",
+            "SS_comb",
             "latency_total0",
             "latency_total1",
             "latency_total2",
