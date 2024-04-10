@@ -1,0 +1,2 @@
+The workloads are converted from the tflite models at link:
+https://github.com/mlcommons/mobile_models/tree/main/v0_7/tflite
