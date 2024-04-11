@@ -1110,19 +1110,23 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
     if active_plot:
         df["dim_str"] = df["dim"].astype(str)
         df["sram_size_KB"] = (df["sram_size"]/1024).astype(str)  # unit: B -> KB
+        # ans=df[(df.sram_size==8*1024) | (df.dim==32)]  # for breakdown
+        # if workload != "geo":
+        #     ans["opcf_ft"] = [x["opcf"] for x in ans.cf_ft]
+        #     ans["emcf_ft"] = [x["soc_epa"]+x["soc_gpa"]+x["soc_mpa"] for x in ans.cf_ft]
+        #     ans["dramcf_ft"] = [x["dram"] for x in ans.cf_ft]
+        #     ans["opcf_fw"] = [x["opcf"] for x in ans.cf_fw]
+        #     ans["emcf_fw"] = [x["soc_epa"] + x["soc_gpa"] + x["soc_mpa"] for x in ans.cf_fw]
+        #     ans["dramcf_fw"] = [x["dram"] for x in ans.cf_fw]
         ## Scenario: continuously active
-        # fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="dim_str", symbol="acc_type", hover_data={"acc_type","sram_size_KB", "dim"})
-        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="sram_size_KB", symbol="acc_type",
-                         hover_data={"acc_type", "sram_size_KB", "dim"}, log_y=True, log_x=True)
+        # fig = px.scatter(ans, x="t_area", y="t_cf_ft_ex_pkg", color="sram_size_KB", symbol="dim_str", hover_data={"acc_type", "sram_size_KB", "dim"}, log_y=True, log_x=True)
+        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="sram_size_KB", symbol="acc_type", hover_data={"acc_type", "sram_size_KB", "dim"}, log_y=True, log_x=True)
         ## add marker style
-        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
-                          selector=dict(mode='markers'))
-        fig.update_layout(title="Scenario: continuously active",
-                          yaxis=dict(title="Carbon/task (exclude packaging) [g, CO2/task]"),
-                          xaxis=dict(title="Area (mm2)"))
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')), selector=dict(mode='markers'))
+        fig.update_layout(title="Scenario: continuously active", yaxis=dict(title="Carbon/task (exclude packaging) [g, CO2/task]"), xaxis=dict(title="Area (mm2)"))
         fig.show()
         ## Scenario: periodically active
-        fig = px.scatter(df, x="t_area", y="t_cf_fw_ex_pkg", color="dim_str", symbol="acc_type",
+        fig = px.scatter(df, x="t_area", y="t_cf_fw_ex_pkg", color="sram_size_KB", symbol="acc_type",
                          hover_data={"acc_type", "sram_size_KB", "dim"})
         fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
                           selector=dict(mode='markers'))
@@ -1720,8 +1724,8 @@ def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, wo
 
 def get_imc_param_setting(acc_type="DIMC", D1=32, D2=32, D3=1):
     ## type: pdigital, DIMC or AIMC
-    # cols: int, can divide with 8
-    # rows: int
+    # D1: int, can divide with 8
+    # D2: int
     # D3: int
     assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
 
@@ -2032,9 +2036,16 @@ def plot_area_trend_in_literature(data):
     plt.tight_layout()
     plt.show()
 
+def cacti_sanity_check(sram_size, d):
+    row_counts_in_sram = sram_size / (2 * d)  # sram_size * precision / partial_output_precision
+    if row_counts_in_sram < 32:
+        return False
+    else:
+        return True
+
 def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict,
                                          pkl_name: str, dram_size: float, dram_ac_cost_per_bit: float,
-                                         possible_dram_energy_removal: bool, size_workloads: dict):
+                                         possible_dram_energy_removal: bool, size_workloads: dict, d1_equal_d2: bool):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
     # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
@@ -2044,6 +2055,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     # @para dram_size: utilized dram size
     # @para dram_ac_cost_per_bit: dram access cost per bit (unit: pJ)
     # @para possible_dram_energy_removal: remove dram energy cost if on-chip weight regs size > workload size
+    # @para d1_equal_d2: Ture: D1=D2, False: D1=D2/8
     trig_time = time.time()
     data_vals = []
     os.system("rm -rf outputs/*")
@@ -2053,7 +2065,18 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                 for d in Dimensions:
                     if workload == workloads[-1] and acc_type == acc_types[-1]:  # show info only at last, to lower the simulation time overhead
                         print(f"workload: {workload}, acc: {acc_type}, sram: {sram_size}, dim: {d}")
-                    tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, D1=d, D2=d, D3=1)
+
+                    # sanity check: if cacti support curren sram size
+                    check_pass = cacti_sanity_check(sram_size=sram_size, d=d)
+                    if not check_pass:
+                        print(f"case skipped: [workload: {workload}, acc: {acc_type}, sram_size: {sram_size}B, dim: {d}]")
+                        continue
+
+                    if d1_equal_d2:
+                        tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, D1=d, D2=d, D3=1)
+                    else:
+                        assert d//8 == d/8, f"current dim size {d} cannot divide 8."
+                        tech_param, hd_param, dims = get_imc_param_setting(acc_type=acc_type, D1=d//8, D2=d, D3=1)
                     if workload == "peak":
                         # peak performance assessment below
                         if acc_type in ["AIMC", "DIMC"]:
@@ -2134,7 +2157,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                 "default": {
                                     "core_allocation": 1,
                                     "memory_operand_links": {"O": "O", "W": "I2", "I": "I1"},
-                                    "spatial_mapping_hint": {"D1": ["K"], "D2": ["C", "FX", "FY"]},
+                                    "spatial_mapping_hint": {"D1": ["K", "OX", "OY"], "D2": ["C", "FX", "FY"]},
                                 }
                             }
                         accelerator, pe_area_total = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload,
@@ -2257,6 +2280,11 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     for acc_type in acc_types:
         for sram_size in sram_sizes:
             for dim in Dimensions:
+                # sanity check: if cacti support curren sram size
+                check_pass = cacti_sanity_check(sram_size=sram_size, d=dim)
+                if not check_pass:
+                    print(f"case skipped: [workload: {workload}, acc: {acc_type}, sram_size: {sram_size}B, dim: {dim}]")
+                    continue
                 geo_topsw = 1
                 geo_tops = 1
                 geo_topsmm2 = 1
@@ -2446,20 +2474,21 @@ if __name__ == "__main__":
     workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
     # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    sram_sizes = [64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
+    sram_sizes = [8 * 1024, 16 * 1024, 32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024]  # unit: B
     # sram_sizes = [256 * 1024]  # unit: B
-    dram_size = 1/1024  # 1MB. unit: GB
-    dram_ac_cost_per_bit = 80.3  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
-    possible_dram_energy_removal = True  # remove dram energy cost if on-chip weight mem size > workload size, only for weight-stationary dataflow
-    # ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
-    ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}  # exclude batch and relu
+    ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
+    # ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}  # exclude batch and relu
     size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
-    pickle_exist = False  # read output directly if the output is saved in the last run
+    ## attributes
+    dram_size = 1 / 1024  # 1MB. unit: GB
+    # dram_ac_cost_per_bit = 80.3  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
+    dram_ac_cost_per_bit = 3.7
+    possible_dram_energy_removal = False  # remove dram energy cost if on-chip weight mem size > workload size, only for weight-stationary dataflow
+    d1_equal_d2 = True  # True [D1=D2=dim], False [D1=dim//8, D2=dim]
+    pickle_exist = True  # read output directly if the output is saved in the last run
 
     # debug
-    # Dimensions = [512]
-    # workloads = ["ds_cnn"]
-    acc_types = ["DIMC"]
+    # acc_types = ["DIMC"]
     # pickle_exist = False
 
     if pickle_exist == False:
@@ -2473,7 +2502,8 @@ if __name__ == "__main__":
                                              Dimensions=Dimensions, periods=periods, pkl_name=pkl_name,
                                              dram_size=dram_size, dram_ac_cost_per_bit=dram_ac_cost_per_bit,
                                              possible_dram_energy_removal=possible_dram_energy_removal,
-                                             size_workloads=size_workloads)
+                                             size_workloads=size_workloads,
+                                             d1_equal_d2=d1_equal_d2)
     else:
         ## Step 1: load df from pickle
         df = read_pickle("expr_res.pkl")
@@ -2489,8 +2519,8 @@ if __name__ == "__main__":
         # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
-        workload = "ds_cnn"
-        sram_size = 256*1024
+        workload = "geo"
+        sram_size = 512*1024
         i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
         assert workload in workloads, f"Legal workload: {workloads}"
         assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
@@ -2498,8 +2528,7 @@ if __name__ == "__main__":
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
         ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=True)
-        breakpoint()
+        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
         ## (2) [check] performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
@@ -2509,7 +2538,7 @@ if __name__ == "__main__":
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=13, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        # scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
         breakpoint()
 
         #######################
