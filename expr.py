@@ -2105,7 +2105,8 @@ def cacti_sanity_check(sram_size, d):
 
 def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_sizes: list, Dimensions: list, periods: dict,
                                          pkl_name: str, dram_size: float, dram_ac_cost_per_bit: float,
-                                         possible_dram_energy_removal: bool, size_workloads: dict, d1_equal_d2: bool):
+                                         possible_dram_energy_removal: bool, size_workloads: dict, d1_equal_d2: bool,
+                                         workload_suit: str):
     # Run zigzag simulation for peak and tinyml workloads.
     # workloads: peak, ds_cnn, ae, mobilenet, resnet8
     # acc_types: AIMC, DIMC, pdigital_ws, pdigital_os
@@ -2126,16 +2127,16 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
         "resnet8": "zigzag/inputs/examples/workload/mlperf_tiny/resnet8.onnx",
         "resnet18": "zigzag/inputs/examples/workload/resnet18.onnx",
         "deeplabv3": "zigzag/inputs/examples/workload/mlperf_mobile/deeplabv3_mnv2_ade20k_inferred.onnx",
-        "mobilebert_inferred": "zigzag/inputs/examples/workload/mlperf_mobile/mobilebert_inferred.onnx",
-        "mobilebert_edgetpu_inferred": "zigzag/inputs/examples/workload/mlperf_mobile/mobilebert_edgetpu_inferred.onnx",
-        "ssd": "zigzag/inputs/examples/workload/mlperf_mobile/ssd_mobilenet_v2_inferred.onnx",
+        "mobilebert": "zigzag/inputs/examples/workload/mlperf_mobile/mobilebert_inferred.onnx",
+        "mobilenet_edgetpu": "zigzag/inputs/examples/workload/mlperf_mobile/mobilenet_edgetpu_inferred.onnx",
+        "mobilenet_v2": "zigzag/inputs/examples/workload/mlperf_mobile/ssd_mobilenet_v2_inferred.onnx",
     }
     for workload in workloads:
         for acc_type in acc_types:
             for sram_size in sram_sizes:
                 for d in Dimensions:
                     if workload == workloads[-1] and acc_type == acc_types[-1]:  # show info only at last, to lower the simulation time overhead
-                        print(f"workload: {workload}, acc: {acc_type}, sram: {sram_size}, dim: {d}")
+                        print(f"workload: {workload}, acc: {acc_type}, sram (KB): {sram_size//1024}, dim: {d}")
 
                     # sanity check: if cacti support curren sram size
                     check_pass = cacti_sanity_check(sram_size=sram_size, d=d)
@@ -2293,6 +2294,10 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         # calc CF (carbon footprint) (below is for g, CO2/op)
                         # cf_total, cf_bd = calc_cf(energy=en_total, lat=lat_total*tclk_total, area=area_total, nb_of_ops=ops_workloads[workload], lifetime=3, chip_yield=0.95)
                         # below is for g, CO2/inference
+                        if lat_total * tclk_total > periods[workload]:  # does not meet the fixed-work requirement
+                            fw_period_meet = False
+                        else:
+                            fw_period_meet = True
                         cf_total_fixed_time, cf_bd_fixed_time, cf_total_fixed_work, cf_bd_fixed_work, cf_total_fixed_time_ex_pkg, cf_total_fixed_work_ex_pkg = calc_cf(
                             energy=en_total, lat=lat_total * tclk_total, area=area_total,
                             nb_of_ops=1, lifetime=3, chip_yield=0.95, fixed_work_period=periods[workload],
@@ -2317,6 +2322,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             "t_cf_fw": cf_total_fixed_work,
                             "t_cf_ft_ex_pkg": cf_total_fixed_time_ex_pkg,
                             "t_cf_fw_ex_pkg": cf_total_fixed_work_ex_pkg,
+                            "fw_period_meet": fw_period_meet,
                             "cme": ans[2],
                         }
                         data_vals.append(res)
@@ -2356,11 +2362,14 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                 geo_cf_fw = 1
                 geo_cf_ft_ex_pkg = 1
                 geo_cf_fw_ex_pkg = 1
+                geo_period_meet = True
                 for workload in workloads:
                     if workload == "geo":  # skip if it's for geo-mean (will be re-calculated)
                         continue
                     dff = df[(df.workload == workload) & (df.acc_type == acc_type) & (df.sram_size == sram_size) & (
                                 df.dim == dim)]
+                    if dff.fw_period_meet.to_list()[0] == False:
+                        geo_period_meet = False  # some workload does not pass fixed-work requirement
                     # re-arrange the stored dict and add metrics
                     new_res = {
                         "workload": dff.workload.to_list()[0],
@@ -2387,9 +2396,12 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         # ops/ps
                         "topsmm2": dff.ops.to_list()[0] / (dff.t_lat.to_list()[0] * dff.t_tclk.to_list()[0] * 1000) /
                                    dff.t_area.to_list()[0],
+                        "fw_period_meet": dff.fw_period_meet.to_list()[0],
                         "cme": dff.cme.to_list()[0],
                     }
-                    if workload in ["ae", "ds_cnn", "mobilenet", "resnet8"]:
+                    if ((workload_suit == "tiny") and (workload in ["ae", "ds_cnn", "mobilenet", "resnet8"])) or (
+                            (workload_suit == "mobile") and (
+                            workload in ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"])):
                         geo_topsw *= new_res["topsw"]
                         geo_tops *= new_res["tops"]
                         geo_topsmm2 *= new_res["topsmm2"]
@@ -2433,6 +2445,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         "topsw": geo_topsw,
                         "tops": geo_tops,
                         "topsmm2": geo_topsmm2,
+                        "fw_period_meet": geo_period_meet,
                     }
                     data_vals.append(geo_res)
     new_df = pd.DataFrame(data_vals)
@@ -2529,59 +2542,81 @@ if __name__ == "__main__":
     # variables: rows_nbs => rows_nbs = cols_nbs
     # variables:
 
+    ############# fix parameters #############
     # period definition # unit: ns (geo means geometric mean of mlperf-tiny workloads; resnet18's period is set to be same as resnet8.
-    # assuming 25FPS for deeplabv3
+    # assuming 25FPS for tinyml-mobile workloads
     periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25, "geo":1e+9/((1*10*0.75*25)**0.25),
                "resnet18": 1e+9/25,
-               "deeplabv3": 1e+9/25}
-    Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
-    # workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
-    workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
-    # workloads = ["resnet18"]
-    acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    sram_sizes = [8 * 1024, 32 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
-    # sram_sizes = [256 * 1024]  # unit: B
+               "deeplabv3": 1e+9/25, "mobilebert": 1e+9/25, "mobilenet_edgetpu": 1e+9/25, "mobilenet_v2": 1e+9/25,}
     ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272,  # include batch and relu
-                     "deeplabv3": 10554605568,}
-    # ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}  # exclude batch and relu
+                     "deeplabv3": 10554605568, "mobilebert": 17667194880, "mobilenet_edgetpu": 1981340928, "mobilenet_v2": 3750131680,}
     size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912,
-                      "deeplabv3": 2238576, "mobilebert_inferred": 1e9, "mobilebert_edgetpu_inferred": 1e9, "ssd": 1e9}  # unit: Byte
-    ## attributes
-    dram_size = 1 / 1024  # 1MB. unit: GB
-    # dram_ac_cost_per_bit = 80.3  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
-    dram_ac_cost_per_bit = 3.7
+                      "deeplabv3": 2238576, "mobilebert": 23004160, "mobilenet_edgetpu": 4052832, "mobilenet_v2": 16795712}  # unit: Byte
+    # dram_ac_cost_per_bit = 80.3  # pJ/bit. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
+    dram_ac_cost_per_bit = 3.7  # pJ/bit
     possible_dram_energy_removal = False  # (not useful anymore, weight dram will be removed within zigzag if allowed) remove dram energy cost if on-chip weight mem size > workload size, only for weight-stationary dataflow
     d1_equal_d2 = True  # True [D1=D2=dim], False [D1=dim//8, D2=dim]
-    pickle_exist = True  # read output directly if the output is saved in the last run
 
-    # debug
-    acc_types = ["pdigital_ws"]
-    workloads = ["deeplabv3"]
-    dram_size = 20 / 1024  # 10 MB. unit: GB
-    sram_sizes = [8*1024*1024, 16*1024*1024] # unit: B
-    # Dimensions = [128]
+    ############# design space #############
+    acc_types = ["pdigital_ws", "pdigital_os", "AIMC",
+                 "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
+    Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
+    workload_suits = ["tiny", "mobile"]  # mlperf-tiny, mlperf-mobile
+    # workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
+
+    ############# simulation button #############
+    pickle_exist = False  # False: start simulation; False: check output
+
+    ############# debugging #############
+    # acc_types = ["pdigital_ws"]
+    # Dimensions = [32]
+    # workload_suits = ["mobilebert"]
+    # debug_dram_size = 20 / 1024  # unit: BG
+    # debug_sram_sizes = [8 * 1024 * 1024]  # unit: B
     # pickle_exist = False
 
     if pickle_exist == False:
         #########################################
         ## Simulation
-        if workloads == ["resnet18"]:
-            pkl_name = "expr_res_resnet18.pkl"
-        elif "deeplabv3" in workloads:
-            pkl_name = "expr_res_mobile.pkl"
-        else:
-            pkl_name = "expr_res.pkl"
-        zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
-                                             Dimensions=Dimensions, periods=periods, pkl_name=pkl_name,
-                                             dram_size=dram_size, dram_ac_cost_per_bit=dram_ac_cost_per_bit,
-                                             possible_dram_energy_removal=possible_dram_energy_removal,
-                                             size_workloads=size_workloads,
-                                             d1_equal_d2=d1_equal_d2)
+        for workload_suit in workload_suits:
+            if workload_suit == "tiny":
+                pkl_name = "expr_res_tiny.pkl"
+                dram_size = 1 / 1024  # 1MB. unit: GB
+                workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
+                sram_sizes = [8 * 1024, 32 * 1024, 128 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
+            elif workload_suit == "mobile":
+                pkl_name = "expr_res_mobile.pkl"
+                dram_size = 20 / 1024  # 20MB. unit: GB
+                workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]
+                sram_sizes = [512*1024*1024, 1*1024*1024, 4*1024*1024, 16*1024*1024, 64*1024*1024]  # unit: B
+            else:  # left for debug mode
+                pkl_name = f"expr_res_{workload_suit}.pkl"
+                dram_size = debug_dram_size  # unit: GB
+                workloads = [workload_suit]
+                sram_sizes = debug_sram_sizes
+
+            zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
+                                                 Dimensions=Dimensions, periods=periods, pkl_name=pkl_name,
+                                                 dram_size=dram_size, dram_ac_cost_per_bit=dram_ac_cost_per_bit,
+                                                 possible_dram_energy_removal=possible_dram_energy_removal,
+                                                 size_workloads=size_workloads,
+                                                 d1_equal_d2=d1_equal_d2, workload_suit=workload_suit)
     else:
         ## Step 1: load df from pickle
-        df = read_pickle("expr_res_mobile.pkl")
-        workloads.append("geo")  # append geo so that plotting for geo is also supported
+        workload_suit = "mobilebert"
 
+        if workload_suit == "tiny":
+            df = read_pickle("expr_res_tiny.pkl")
+            workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
+            workloads.append("geo")  # append geo so that plotting for geo is also supported
+        elif workload_suit == "mobile":
+            df = read_pickle("expr_res_mobile.pkl")
+            workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]
+            workloads.append("geo")  # append geo so that plotting for geo is also supported
+        else:  # illegal branch
+            df = read_pickle(f"expr_res_{workload_suit}.pkl")
+
+        breakpoint()
         ## Step 2:
         #########################################
         ## Visualization (Experiment playground)

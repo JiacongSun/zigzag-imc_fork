@@ -424,7 +424,13 @@ class SearchUnusedMemoryStage(Stage):
                                 self.mem_update_weight = curr_mem_level
         ## [OPTIONAL CHECK] assert check if there is -1 value in mem_update_list
         ## [NOTE] Until here, if there is still -1 value in mem_update_list, it means the size of top mem level for IO is not big enough.
-        # ans = self.calc_total_ops_in_current_workload()
+
+        # for debug
+        # total_ops = self.calc_total_ops_in_current_workload()
+        # req_minimal_sram_kB = self.calc_required_minimal_sram_size()/8/1024  # unit: KB
+        # workload_size = self.weight_size_entire_workload//8  # unit: Byte
+        # breakpoint()
+
         for layer_ele in self.mem_update_list.values():
             for operand_dict in layer_ele:
                 assert (
@@ -438,6 +444,18 @@ class SearchUnusedMemoryStage(Stage):
         ops_per_layer = [2*np.prod([dim_size for dim_size in dim_info.values()]) for dim_info in layers_dim_info]
         total_ops = np.sum(ops_per_layer)
         return total_ops
+
+    def calc_required_minimal_sram_size(self):
+        # calc how big sram size is required to put input & outupt on chip
+        io_size_per_layer = self.each_layer_IO_data_size  # unit: bit
+        max_io_size = 0
+        for idx, layer_io_size in io_size_per_layer.items():
+            i_size = layer_io_size[0]["I1"]  # unit: bit
+            o_size = layer_io_size[0]["O"]  # unit: bit
+            if i_size + o_size > max_io_size:
+                max_io_size = i_size + o_size
+                max_layer_id = idx
+        return max_io_size
 
     def check_if_mem_serve_all_oa_dims(self, mem, accelerator):
         # check if mem serve all hardare dimensions

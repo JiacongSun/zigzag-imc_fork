@@ -650,6 +650,11 @@ class CostModelEvaluation:
         self.MAC_energy = adders_energy + mult_energy
 
     def calc_adders_energy(self):
+        if self.layer.type not in ["matmul", "gemm", "conv"]:  # debugging branch
+            breakpoint()
+        if self.layer.type == "matmul":
+            adder_tree_energy = 0
+            return adder_tree_energy
         # tell if the dataflow is weight stationary or output stationary
         # add energy for weight stationary dataflow
         lowest_mem_level = self.accelerator.cores[0].memory_hierarchy.mem_level_list[0]
