@@ -1089,7 +1089,8 @@ def plot_carbon_breakdown_in_curve(i_df, acc_types, workload, sram_size=256*1024
     plt.tight_layout()
     plt.show()
 
-def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, complexity=50, raw_data={}, d1_equal_d2=True, active_plot=True):
+def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, complexity=50,
+                                   raw_data={}, d1_equal_d2=True, active_plot=True):
     # This function is to plot carbon cost in entire exploration space in a scatter plot.
     # The output figure consists of 4 subplots (x-axis: area):
     # 1th (left): carbon footprint breakdown (fixed-time)
@@ -1360,13 +1361,15 @@ def memory_hierarchy_dut_for_pdigital_os(parray, visualize=False, sram_size=256*
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024, dram_ac_cost_per_bit=3.7):
+def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024,
+                                         dram_ac_cost_per_bit=3.7, enable_weight_dram_removal=False):
     # This function defines the memory hierarchy in the hardware template.
     # @para parray: digital pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
     # @para dram_size: define the off-chip dram size, unit: byte
     # @para dram_ac_cost_per_bit: dram access cost per bit, unit: pJ
+    # @para enable_weight_dram_removal: if remove dram level for weight and put weight also in on-chip SRAM.
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
 
@@ -1431,8 +1434,8 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
         r_cost=sram_r_cost,
         w_cost=sram_w_cost,
         area=sram_area,
-        r_port=3,
-        w_port=3,
+        r_port=4,
+        w_port=4,
         rw_port=0,
         latency=1,
         min_r_granularity=sram_bw//16, # assume there are 16 sub-banks
@@ -1491,30 +1494,54 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
 
     ##################################### on-chip highest memory hierarchy initialization #####################################
 
-    memory_hierarchy_graph.add_memory(
-        memory_instance=sram_256KB_256_3r_3w,
-        operands=("I1", "O",),
-        port_alloc=(
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
-            # {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
-        ),
-        served_dimensions="all",
-    )
+    if enable_weight_dram_removal:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=sram_256KB_256_3r_3w,
+            operands=("I1", "I2", "O",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                {"fh": "w_port_4", "tl": "r_port_4", "fl": None, "th": None},
+                {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
+    else:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=sram_256KB_256_3r_3w,
+            operands=("I1", "O",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
 
     ####################################################################################################################
 
-    memory_hierarchy_graph.add_memory(
-        memory_instance=dram_3r_3w,
-        operands=("I1", "I2", "O"),
-        # operands=("I2",),
-        port_alloc=(
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
-            {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
-        ),
-        served_dimensions="all",
-    )
+    if enable_weight_dram_removal:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=dram_3r_3w,
+            operands=("I1", "O"),
+            # operands=("I2",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                # {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
+    else:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=dram_3r_3w,
+            operands=("I1", "I2", "O"),
+            # operands=("I2",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
 
     if visualize:
         from zigzag.visualization.graph.memory_hierarchy import (
@@ -1524,13 +1551,15 @@ def memory_hierarchy_dut_for_pdigital_ws(parray, visualize=False, sram_size=256*
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024, dram_ac_cost_per_bit=3.7):
+def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024, dram_size=1 * 1024 * 1024,
+                                 dram_ac_cost_per_bit=3.7, enable_weight_dram_removal=False):
     # This function defines the memory hierarchy in the hardware template.
     # @para imc_array: imc pe array object
     # @para visualize: whether illustrate teh memory hierarchy
     # @para sram_size: define the on-chip sram size, unit: byte
     # @para dram_size: define the off-chip dram size, unit: byte
     # @para dram_ac_cost_per_bit: dram access cost per bit, unit: pJ
+    # @para enable_weight_dram_removal: if remove dram level for weight and put weight also in on-chip SRAM.
     """ [OPTIONAL] Get w_cost of imc cell group from CACTI if required """
     cacti_path = "zigzag/classes/cacti/cacti_master"
     tech_param = imc_array.unit.logic_unit.tech_param
@@ -1602,8 +1631,8 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
         r_cost=sram_r_cost,
         w_cost=sram_w_cost,
         area=sram_area,
-        r_port=3,
-        w_port=3,
+        r_port=4,
+        w_port=4,
         rw_port=0,
         latency=1,
         min_r_granularity=sram_bw//16, # assume there are 16 sub-banks
@@ -1662,30 +1691,54 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
 
     ##################################### on-chip highest memory hierarchy initialization #####################################
 
-    memory_hierarchy_graph.add_memory(
-        memory_instance=sram_256KB_256_3r_3w,
-        operands=("I1", "O",),
-        port_alloc=(
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
-            # {"fh": "w_port_4", "tl": "r_port_4", "fl": None, "th": None},
-            {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
-        ),
-        served_dimensions="all",
-    )
+    if enable_weight_dram_removal:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=sram_256KB_256_3r_3w,
+            operands=("I1", "I2", "O",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                {"fh": "w_port_4", "tl": "r_port_4", "fl": None, "th": None},
+                {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
+    else:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=sram_256KB_256_3r_3w,
+            operands=("I1", "O",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                {"fh": "w_port_2", "tl": "r_port_2", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
 
     ####################################################################################################################
 
-    memory_hierarchy_graph.add_memory(
-        memory_instance=dram_3r_3w,
-        operands=("I1", "I2", "O"),
-        # operands=("I2",),
-        port_alloc=(
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
-            {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
-            {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
-        ),
-        served_dimensions="all",
-    )
+    if enable_weight_dram_removal:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=dram_3r_3w,
+            operands=("I1", "O"),
+            # operands=("I2",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                # {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
+    else:
+        memory_hierarchy_graph.add_memory(
+            memory_instance=dram_3r_3w,
+            operands=("I1", "I2", "O"),
+            # operands=("I2",),
+            port_alloc=(
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": None, "th": None},
+                {"fh": "w_port_2", "tl": "r_port_2", "fl": None, "th": None},
+                {"fh": "w_port_1", "tl": "r_port_1", "fl": "w_port_3", "th": "r_port_3"},
+            ),
+            served_dimensions="all",
+        )
 
     if visualize:
         from zigzag.visualization.graph.memory_hierarchy import (
@@ -1695,22 +1748,29 @@ def memory_hierarchy_dut_for_imc(imc_array, visualize=False, sram_size=256*1024,
         visualize_memory_hierarchy_graph(memory_hierarchy_graph)
     return memory_hierarchy_graph
 
-def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, workload="resnet8", dram_ac_cost_per_bit=3.7):
+def get_accelerator(acc_type, tech_param, hd_param, dims, sram_size=256*1024, dram_size_GB=1/1024, workload="resnet8",
+                    dram_ac_cost_per_bit=3.7, workload_size=1e9,):
+    # @para dram_size: dram size (unit: GB)
+    # @para layer_size: workload size for weight. Unit: Byte
     assert acc_type in ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"], f"acc_type {acc_type} not in [pdigital_ws, pdigital_os, AIMC, DIMC]"
-    if workload == "resnet18":
-        dram_size = 15 * 1024 * 1024  # 12 MB for resnet18
+    dram_size = int(math.ceil(dram_size_GB * 1024 * 1024 * 1024))  # unit: B
+    # check if dram level for weight should be removed
+    if sram_size > workload_size:
+        enable_weight_dram_removal = True
     else:
-        dram_size = 1 * 1024 * 1024  # 1 MB for Mlperf Tiny workloads
+        enable_weight_dram_removal = False
     if acc_type in ["AIMC", "DIMC"]:
         imc_array = ImcArray(tech_param, hd_param, dims)
         mem_hier = memory_hierarchy_dut_for_imc(imc_array, sram_size=sram_size, dram_size=dram_size,
-                                                dram_ac_cost_per_bit=dram_ac_cost_per_bit)
+                                                dram_ac_cost_per_bit=dram_ac_cost_per_bit,
+                                                enable_weight_dram_removal=enable_weight_dram_removal)
         pe_area_total = 0  # no use parameter for IMC
     else:
         parray, multiplier_energy, pe_area_total = digital_array(acc_type, dims)
         if acc_type == "pdigital_ws":
             mem_hier = memory_hierarchy_dut_for_pdigital_ws(parray, sram_size=sram_size, dram_size=dram_size,
-                                                            dram_ac_cost_per_bit=dram_ac_cost_per_bit)
+                                                            dram_ac_cost_per_bit=dram_ac_cost_per_bit,
+                                                            enable_weight_dram_removal=enable_weight_dram_removal)
         else:
             mem_hier = memory_hierarchy_dut_for_pdigital_os(parray, sram_size=sram_size, dram_size=dram_size,
                                                             dram_ac_cost_per_bit=dram_ac_cost_per_bit)
@@ -2059,6 +2119,17 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     trig_time = time.time()
     data_vals = []
     os.system("rm -rf outputs/*")
+    workloads_dir = {
+        "ds_cnn": "zigzag/inputs/examples/workload/mlperf_tiny/ds_cnn.onnx",
+        "ae": "zigzag/inputs/examples/workload/mlperf_tiny/deepautoencoder.onnx",
+        "mobilenet": "zigzag/inputs/examples/workload/mlperf_tiny/mobilenet_v1.onnx",
+        "resnet8": "zigzag/inputs/examples/workload/mlperf_tiny/resnet8.onnx",
+        "resnet18": "zigzag/inputs/examples/workload/resnet18.onnx",
+        "deeplabv3": "zigzag/inputs/examples/workload/mlperf_mobile/deeplabv3_mnv2_ade20k_inferred.onnx",
+        "mobilebert_inferred": "zigzag/inputs/examples/workload/mlperf_mobile/mobilebert_inferred.onnx",
+        "mobilebert_edgetpu_inferred": "zigzag/inputs/examples/workload/mlperf_mobile/mobilebert_edgetpu_inferred.onnx",
+        "ssd": "zigzag/inputs/examples/workload/mlperf_mobile/ssd_mobilenet_v2_inferred.onnx",
+    }
     for workload in workloads:
         for acc_type in acc_types:
             for sram_size in sram_sizes:
@@ -2131,18 +2202,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                         data_vals.append(res)
                     else:
                         # real workload performance assessment below
-                        if workload == "ds_cnn":
-                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/ds_cnn.onnx"
-                        elif workload == "ae":
-                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/deepautoencoder.onnx"
-                        elif workload == "mobilenet":
-                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/mobilenet_v1.onnx"
-                        elif workload == "resnet8":
-                            workload_dir = "zigzag/inputs/examples/workload/mlperf_tiny/resnet8.onnx"
-                        elif workload == "resnet18":
-                            workload_dir = "zigzag/inputs/examples/workload/resnet18.onnx"
-                        else:
-                            breakpoint()  # to be extended to other networks
+                        workload_dir = workloads_dir[workload]
 
                         if acc_type == "pdigital_os":
                             mapping = {
@@ -2160,8 +2220,9 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                                     "spatial_mapping_hint": {"D1": ["K", "OX", "OY"], "D2": ["C", "FX", "FY"]},
                                 }
                             }
-                        accelerator, pe_area_total = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, workload,
-                                                      dram_ac_cost_per_bit)
+                        workload_size = size_workloads[workload]
+                        accelerator, pe_area_total = get_accelerator(acc_type, tech_param, hd_param, dims, sram_size, dram_size, workload,
+                                                      dram_ac_cost_per_bit, workload_size)
 
                         # Call API
                         hw_name = acc_type
@@ -2467,28 +2528,38 @@ if __name__ == "__main__":
     # variables: cols_nbs => [32, 64, .., 1024]
     # variables: rows_nbs => rows_nbs = cols_nbs
     # variables:
+
+    # period definition # unit: ns (geo means geometric mean of mlperf-tiny workloads; resnet18's period is set to be same as resnet8.
+    # assuming 25FPS for deeplabv3
     periods = {"peak": 1, "ae": 1e+9/1, "ds_cnn": 1e+9/10, "mobilenet": 1e+9/0.75, "resnet8": 1e+9/25, "geo":1e+9/((1*10*0.75*25)**0.25),
-               "resnet18": 1e+9/25}  # unit: ns (geo means geometric mean of mlperf-tiny workloads; resnet18's period is set to be same as resnet8.
+               "resnet18": 1e+9/25,
+               "deeplabv3": 1e+9/25}
     Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
     # workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
     workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
     # workloads = ["resnet18"]
     acc_types = ["pdigital_ws", "pdigital_os", "AIMC", "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    sram_sizes = [8 * 1024, 16 * 1024, 32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024]  # unit: B
+    sram_sizes = [8 * 1024, 32 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
     # sram_sizes = [256 * 1024]  # unit: B
-    ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272}  # inlude batch and relu
+    ops_workloads = {'ae': 532512, 'ds_cnn': 5609536, 'mobilenet': 15907840, 'resnet8': 25302272,  # include batch and relu
+                     "deeplabv3": 10554605568,}
     # ops_workloads = {'ae': 264192, 'ds_cnn': 2656768, 'mobilenet': 7489644, 'resnet8': 12501632, "resnet18": 3628146688}  # exclude batch and relu
-    size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912}
+    size_workloads = {"ae": 264192, "ds_cnn": 22016, "mobilenet": 208112, "resnet8": 77360, "resnet18": 11678912,
+                      "deeplabv3": 2238576, "mobilebert_inferred": 1e9, "mobilebert_edgetpu_inferred": 1e9, "ssd": 1e9}  # unit: Byte
     ## attributes
     dram_size = 1 / 1024  # 1MB. unit: GB
     # dram_ac_cost_per_bit = 80.3  # pJ. From dramsim result: using command "./build/dramsim3main configs/DDR3_4Gb_x8_1600.ini --stream random -c 100000"
     dram_ac_cost_per_bit = 3.7
-    possible_dram_energy_removal = False  # remove dram energy cost if on-chip weight mem size > workload size, only for weight-stationary dataflow
+    possible_dram_energy_removal = False  # (not useful anymore, weight dram will be removed within zigzag if allowed) remove dram energy cost if on-chip weight mem size > workload size, only for weight-stationary dataflow
     d1_equal_d2 = True  # True [D1=D2=dim], False [D1=dim//8, D2=dim]
     pickle_exist = True  # read output directly if the output is saved in the last run
 
     # debug
-    # acc_types = ["DIMC"]
+    acc_types = ["pdigital_ws"]
+    workloads = ["deeplabv3"]
+    dram_size = 20 / 1024  # 10 MB. unit: GB
+    sram_sizes = [8*1024*1024, 16*1024*1024] # unit: B
+    # Dimensions = [128]
     # pickle_exist = False
 
     if pickle_exist == False:
@@ -2496,6 +2567,8 @@ if __name__ == "__main__":
         ## Simulation
         if workloads == ["resnet18"]:
             pkl_name = "expr_res_resnet18.pkl"
+        elif "deeplabv3" in workloads:
+            pkl_name = "expr_res_mobile.pkl"
         else:
             pkl_name = "expr_res.pkl"
         zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
@@ -2506,7 +2579,7 @@ if __name__ == "__main__":
                                              d1_equal_d2=d1_equal_d2)
     else:
         ## Step 1: load df from pickle
-        df = read_pickle("expr_res.pkl")
+        df = read_pickle("expr_res_mobile.pkl")
         workloads.append("geo")  # append geo so that plotting for geo is also supported
 
         ## Step 2:
@@ -2519,8 +2592,8 @@ if __name__ == "__main__":
         # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
-        workload = "geo"
-        sram_size = 512*1024
+        workload = "deeplabv3"
+        sram_size = 8*1024*1024
         i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
         assert workload in workloads, f"Legal workload: {workloads}"
         assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
@@ -2528,7 +2601,7 @@ if __name__ == "__main__":
                                    "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
                                    "different to each other."
         ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
+        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
         ## (2) [check] performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
@@ -2538,7 +2611,7 @@ if __name__ == "__main__":
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=13, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        # scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
         breakpoint()
 
         #######################

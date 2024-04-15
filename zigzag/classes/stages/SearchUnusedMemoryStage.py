@@ -424,11 +424,20 @@ class SearchUnusedMemoryStage(Stage):
                                 self.mem_update_weight = curr_mem_level
         ## [OPTIONAL CHECK] assert check if there is -1 value in mem_update_list
         ## [NOTE] Until here, if there is still -1 value in mem_update_list, it means the size of top mem level for IO is not big enough.
+        # ans = self.calc_total_ops_in_current_workload()
         for layer_ele in self.mem_update_list.values():
             for operand_dict in layer_ele:
                 assert (
                     list(operand_dict.values())[0] >= 0
                 ), "SearchUnusedMemoryStage fisnishes abnormally, there are still layers with top mem levels not figured out."
+
+    def calc_total_ops_in_current_workload(self):  # unit: operator count
+        import numpy as np
+        layers = [x[1] for x in enumerate(nx.topological_sort(self.workload))]
+        layers_dim_info = [x.loop_dim_size for x in layers]
+        ops_per_layer = [2*np.prod([dim_size for dim_size in dim_info.values()]) for dim_info in layers_dim_info]
+        total_ops = np.sum(ops_per_layer)
+        return total_ops
 
     def check_if_mem_serve_all_oa_dims(self, mem, accelerator):
         # check if mem serve all hardare dimensions

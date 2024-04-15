@@ -595,7 +595,7 @@ class CostModelEvaluation:
         self.calc_memory_energy_cost()
 
     ## Calculate the dynamic MAC energy
-    def calc_MAC_energy_cost(self, gating_used=False):
+    def calc_MAC_energy_cost(self, gating_used=True):
         core = self.accelerator.get_core(self.core_id)
         single_MAC_energy = core.operational_array.unit.cost
         if not gating_used:
