@@ -123,6 +123,13 @@ class SpatialMappingGeneratorStage(Stage):
             logger.debug(f"No user-provided spatial mappings found. Auto-generating..")
         nb_user_spatial_mappings = len(user_spatial_mappings)
 
+        # add one option to avoid the assertion in check_layer of SpatialConversionStage if no spatial mapping is found
+        if len(user_spatial_mappings[0]) == 0 and self.layer.user_spatial_mapping_hint is not None:
+            mapped_hd_dim = self.accelerator.cores[0].operational_array.dimensions[0].name
+            mapped_layer_dim = self.layer.user_spatial_mapping_hint[mapped_hd_dim][0]
+            created_mapping = {mapped_hd_dim: (mapped_layer_dim, 1)}
+            user_spatial_mappings = [created_mapping]
+
         for i, user_spatial_mapping in enumerate(user_spatial_mappings):
             logger.info(
                 f"Launching spatial mapping {i+1}/{nb_user_spatial_mappings}: {user_spatial_mapping}."

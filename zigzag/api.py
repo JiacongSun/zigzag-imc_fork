@@ -67,7 +67,7 @@ def get_hardware_performance_zigzag(
         enable_mix_spatial_mapping_generation=True,  # enable auto-generation of mix spatial mapping
         maximize_hardware_utilization=True, # only evaluate spatial mapping with top2 utilization (fast simulation)
         enable_weight_diagonal_mapping=True,  # required by SpatialMappingGeneratorStage
-        loma_show_progress_bar=True,
+        loma_show_progress_bar=False,
         # If we need access the same input data multiple times from the innermost memory level and the data size is smaller than the memory read bw,
         # take into account only one-time access cost (assume the data can stay at the output pins of the memory as long as it is needed).
         # By default, if the parameter is not defined, it will be set as False internally.

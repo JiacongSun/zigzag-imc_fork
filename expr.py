@@ -1089,7 +1089,7 @@ def plot_carbon_breakdown_in_curve(i_df, acc_types, workload, sram_size=256*1024
     plt.tight_layout()
     plt.show()
 
-def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, complexity=50,
+def scatter_carbon_cost_four_cases(acc_types, sram_sizes, workload, complexity=50,
                                    raw_data={}, d1_equal_d2=True, active_plot=True):
     # This function is to plot carbon cost in entire exploration space in a scatter plot.
     # The output figure consists of 4 subplots (x-axis: area):
@@ -1134,6 +1134,42 @@ def scatter_carbon_cost_four_cases(i_df, acc_types, sram_sizes, workload, comple
         fig.update_layout(title="Scenario: periodically active",
                           yaxis=dict(title="Carbon/task (exclude packaging) [g, CO2/task]"),
                           xaxis=dict(title="Area (mm2)"))
+        fig.show()
+        ## topsw
+        fig = px.scatter(df, x="t_area", y="topsw", color="sram_size_KB", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim"}, log_x=True, log_y=True)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="TOP/s/W",
+                          yaxis=dict(title="TOP/s/W"),
+                          xaxis=dict(title="Area (mm2)"))
+        fig.show()
+        ## tops
+        fig = px.scatter(df, x="t_area", y="tops", color="sram_size_KB", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim"}, log_x=True, log_y=True)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="TOP/s",
+                          yaxis=dict(title="TOP/s"),
+                          xaxis=dict(title="Area (mm2)"))
+        fig.show()
+        ## topsmm2
+        fig = px.scatter(df, x="t_area", y="topsmm2", color="sram_size_KB", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim"}, log_x=True, log_y=True)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="TOP/s/mm2",
+                          yaxis=dict(title="TOP/s/mm2"),
+                          xaxis=dict(title="Area (mm2)"))
+        fig.show()
+        ## cf_fw (y) vs. cf_ft (x)
+        fig = px.scatter(df, x="t_cf_ft", y="t_cf_fw", color="sram_size_KB", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim", "t_area"}, log_x=True, log_y=True)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="Carbon: periodic active vs. continuous active",
+                          yaxis=dict(title="Carbon/task (PA) [g, CO2/task]"),
+                          xaxis=dict(title="Carbon/task (CA) [g, CO2/task]"))
         fig.show()
         breakpoint()
     else:
@@ -2119,7 +2155,14 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
     # @para d1_equal_d2: Ture: D1=D2, False: D1=D2/8
     trig_time = time.time()
     data_vals = []
-    os.system("rm -rf outputs/*")
+    if workload_suit in ["tiny", "mobile"]:
+        output_dir = f"outputs_{workload_suit}"
+    else:
+        output_dir = f"outputs"
+
+    os.makedirs(output_dir, exist_ok=True)
+    os.system(f"rm -rf {output_dir}/*")
+
     workloads_dir = {
         "ds_cnn": "zigzag/inputs/examples/workload/mlperf_tiny/ds_cnn.onnx",
         "ae": "zigzag/inputs/examples/workload/mlperf_tiny/deepautoencoder.onnx",
@@ -2135,8 +2178,9 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
         for acc_type in acc_types:
             for sram_size in sram_sizes:
                 for d in Dimensions:
-                    if workload == workloads[-1] and acc_type == acc_types[-1]:  # show info only at last, to lower the simulation time overhead
-                        print(f"workload: {workload}, acc: {acc_type}, sram (KB): {sram_size//1024}, dim: {d}")
+                    # if workload == workloads[-1] and acc_type == acc_types[-1]:  # show info only at last, to lower the simulation time overhead
+                    iter_start_time = time.time()
+                    print(f"workload: {workload}, acc: {acc_type}, sram (KB): {sram_size//1024}, dim: {d}", end=", ")
 
                     # sanity check: if cacti support curren sram size
                     check_pass = cacti_sanity_check(sram_size=sram_size, d=d)
@@ -2232,18 +2276,18 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             wl_name = re.split(r"/|\.", workload_dir)[-2]
                         experiment_id = f"{hw_name}-{wl_name}"
                         cmes_pkl_name = f"{experiment_id}-saved_list_of_cmes"
-                        os.system(f"rm -rf outputs/{experiment_id}-layer_overall_complete.json")
+                        os.system(f"rm -rf {output_dir}/{experiment_id}-layer_overall_complete.json")
 
                         ans = get_hardware_performance_zigzag(
                             workload_dir,
                             accelerator,
                             mapping,
                             opt="EDP",
-                            dump_filename_pattern=f"outputs/{experiment_id}-layer_?.json",
-                            pickle_filename=f"outputs/{cmes_pkl_name}.pickle",
+                            dump_filename_pattern=f"{output_dir}/{experiment_id}-layer_?.json",
+                            pickle_filename=f"{output_dir}/{cmes_pkl_name}.pickle",
                         )
                         # Read output
-                        with open(f"outputs/{experiment_id}-layer_overall_complete.json", "r") as fp:
+                        with open(f"{output_dir}/{experiment_id}-layer_overall_complete.json", "r") as fp:
                             dat = json.load(fp)
                         en_total = dat["outputs"]["energy"]["energy_total"]  # float: pJ
                         lat_total = dat["outputs"]["latency"]["computation"]  # float: cycles
@@ -2326,6 +2370,8 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                             "cme": ans[2],
                         }
                         data_vals.append(res)
+                    iter_end_time = time.time()
+                    print(f"elapsed time: {round(iter_end_time - iter_start_time)} sec")
 
     df = pd.DataFrame(data_vals)
 
@@ -2415,7 +2461,7 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                     data_vals.append(new_res)
 
                 if workloads != ["resnet18"]:
-                    geo_topsw = geo_topsw ** (1 / 4)
+                    geo_topsw = geo_topsw ** (1 / 4)  # each suit has 4 networks
                     geo_tops = geo_tops ** (1 / 4)
                     geo_topsmm2 = geo_topsmm2 ** (1 / 4)
                     geo_cf_ft = geo_cf_ft ** (1 / 4)
@@ -2558,21 +2604,19 @@ if __name__ == "__main__":
     d1_equal_d2 = True  # True [D1=D2=dim], False [D1=dim//8, D2=dim]
 
     ############# design space #############
-    acc_types = ["pdigital_ws", "pdigital_os", "AIMC",
+    acc_types = ["pdigital_os", "pdigital_ws", "AIMC",
                  "DIMC"]  # pdigital_ws (pure digital, weight stationary), (pure digital, output stationary), AIMC, DIMC
-    Dimensions = [2 ** x for x in range(5, 11)]  # options of cols_nbs, rows_nbs
+    Dimensions = [2 ** x for x in range(10, 4, -1)]  # options of cols_nbs, rows_nbs
     workload_suits = ["tiny", "mobile"]  # mlperf-tiny, mlperf-mobile
     # workloads = ["peak", "ae", "ds_cnn", "mobilenet", "resnet8"]  # peak: macro-level peak  # options of workloads
 
     ############# simulation button #############
-    pickle_exist = False  # False: start simulation; False: check output
+    pickle_exist = True  # False: start simulation; False: check output
 
     ############# debugging #############
-    # acc_types = ["pdigital_ws"]
-    # Dimensions = [32]
-    # workload_suits = ["mobilebert"]
-    # debug_dram_size = 20 / 1024  # unit: BG
-    # debug_sram_sizes = [8 * 1024 * 1024]  # unit: B
+    # workload_suits = ["mobile"]
+    # debug_dram_size = 25/1024
+    # debug_sram_sizes = [512 * 1024]
     # pickle_exist = False
 
     if pickle_exist == False:
@@ -2586,9 +2630,10 @@ if __name__ == "__main__":
                 sram_sizes = [8 * 1024, 32 * 1024, 128 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
             elif workload_suit == "mobile":
                 pkl_name = "expr_res_mobile.pkl"
-                dram_size = 20 / 1024  # 20MB. unit: GB
+                dram_size = 25 / 1024  # 20MB. unit: GB
                 workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]
-                sram_sizes = [512*1024*1024, 1*1024*1024, 4*1024*1024, 16*1024*1024, 64*1024*1024]  # unit: B
+                # sram_sizes = [512*1024*1024, 1*1024*1024, 4*1024*1024, 16*1024*1024, 64*1024*1024]  # unit: B
+                sram_sizes = [1 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024]
             else:  # left for debug mode
                 pkl_name = f"expr_res_{workload_suit}.pkl"
                 dram_size = debug_dram_size  # unit: GB
@@ -2603,20 +2648,22 @@ if __name__ == "__main__":
                                                  d1_equal_d2=d1_equal_d2, workload_suit=workload_suit)
     else:
         ## Step 1: load df from pickle
-        workload_suit = "mobilebert"
+        workload_suit = "mobile"
 
         if workload_suit == "tiny":
-            df = read_pickle("expr_res_tiny.pkl")
+            df = read_pickle("no_cme_expr_res_tiny.pkl")
             workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
+            sram_sizes = [8 * 1024, 32 * 1024, 128 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
             workloads.append("geo")  # append geo so that plotting for geo is also supported
         elif workload_suit == "mobile":
-            df = read_pickle("expr_res_mobile.pkl")
+            df = read_pickle("no_cme_expr_res_mobile.pkl")
             workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]
+            sram_sizes = [512 * 1024 * 1024, 1 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024,
+                          64 * 1024 * 1024]  # unit: B
             workloads.append("geo")  # append geo so that plotting for geo is also supported
-        else:  # illegal branch
+        else:  # debugging branch
             df = read_pickle(f"expr_res_{workload_suit}.pkl")
 
-        breakpoint()
         ## Step 2:
         #########################################
         ## Visualization (Experiment playground)
@@ -2627,14 +2674,14 @@ if __name__ == "__main__":
         # (2) the optimum will shift when increasing the task complexity under fixed-work scenarios, but it's not true
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
-        workload = "deeplabv3"
-        sram_size = 8*1024*1024
-        i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
-        assert workload in workloads, f"Legal workload: {workloads}"
-        assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
-        assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
-                                   "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
-                                   "different to each other."
+        workload = "geo"
+        # sram_size = 512*1024
+        # i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
+        # assert workload in workloads, f"Legal workload: {workloads}"
+        # assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
+        # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
+        #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
+        #                            "different to each other."
         ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
         # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
         ## (2) [check] performance together with carbon (x axis: dimension size)
@@ -2646,7 +2693,7 @@ if __name__ == "__main__":
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=13, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        scatter_carbon_cost_four_cases(i_df=i_df, acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        scatter_carbon_cost_four_cases(acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
         breakpoint()
 
         #######################

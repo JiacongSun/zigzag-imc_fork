@@ -36,7 +36,7 @@ class SpatialMappingConversionStage(Stage):
         if not layer.user_spatial_mapping:
             logger.critical(f"Layer {layer} has no user-defined spatial mapping.")
             raise ValueError(
-                "Missing spatial mapping for {layer}. Please provide 'spatial_mapping' for {layer}."
+                f"Missing spatial mapping for {layer}. Please provide 'spatial_mapping' for {layer}."
             )
 
         return True
