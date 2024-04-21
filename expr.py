@@ -2860,9 +2860,9 @@ if __name__ == "__main__":
                                                )
         breakpoint()
 
-    df = read_pickle("expr_res_tiny_wo_localloop.pkl")
-    bar_localmemoryloop(df)
-    breakpoint()
+    # df = read_pickle("expr_res_tiny_wo_localloop.pkl")
+    # bar_localmemoryloop(df)
+    # breakpoint()
 
     if pickle_exist == False:
         #########################################
