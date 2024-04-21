@@ -398,6 +398,10 @@ class SearchUnusedMemoryStage(Stage):
                         required_total_size = (
                             required_IO_data_size + required_weight_size
                         )  # required size to put data in current mem level
+                        weight_size_curr_layer = layer.operand_size_bit[layer.constant_operands[0]]
+                        required_total_size_IO = (
+                            required_IO_data_size
+                        )
                         if (
                             required_total_size <= avail_mem_size
                         ):  # sum(layer[operand_size] for operand in mem.operands) <= mem.size
@@ -422,6 +426,16 @@ class SearchUnusedMemoryStage(Stage):
                                 and mem_serve_weight
                             ):  # update weight mem level
                                 self.mem_update_weight = curr_mem_level
+                        elif (
+                            mem_serve_io_both and required_total_size_IO <= avail_mem_size
+                        ):  # IO can be put locally
+                            if id == 0:
+                                self.update_IO_mem_level(
+                                    curr_id, act_operand, curr_mem_level
+                                )  # update input mem level
+                            self.update_IO_mem_level(
+                                curr_id, output_operand, curr_mem_level
+                            )  # update output mem level
         ## [OPTIONAL CHECK] assert check if there is -1 value in mem_update_list
         ## [NOTE] Until here, if there is still -1 value in mem_update_list, it means the size of top mem level for IO is not big enough.
 
@@ -429,7 +443,6 @@ class SearchUnusedMemoryStage(Stage):
         # total_ops = self.calc_total_ops_in_current_workload()
         # req_minimal_sram_kB = self.calc_required_minimal_sram_size()/8/1024  # unit: KB
         # workload_size = self.weight_size_entire_workload//8  # unit: Byte
-        # breakpoint()
 
         for layer_ele in self.mem_update_list.values():
             for operand_dict in layer_ele:

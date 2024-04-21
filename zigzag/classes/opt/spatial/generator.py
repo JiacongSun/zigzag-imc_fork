@@ -204,9 +204,27 @@ class UserSpatialMappingGenerator:
         # record down the number of yield
         yield_count = 0
         yield_count_limit = 2  # used to control the yield count when maximize_hardware_utilization == True
+        comb_total_loop_size_init = 0
         for combination in itertools.product(*unrollings):
-            if maximize_hardware_utilization and yield_count >= yield_count_limit:
-                # 2 means: only check the top 2 spatial mapping with the highest hardware utilization
+            # calc total loop size
+            comb_total_loop_size = 1
+            for comb_loop in combination:
+                if comb_loop is None:
+                    continue
+                else:
+                    if self.is_nested_tuple(comb_loop):
+                        comb_curr_loop_size = 1
+                        for comb_loop_element in comb_loop:
+                            comb_curr_loop_size *= comb_loop_element[1]
+                    else:
+                        comb_curr_loop_size = comb_loop[1]
+                    comb_total_loop_size *= comb_curr_loop_size
+
+            if comb_total_loop_size != comb_total_loop_size_init:
+                yield_count += 1  # jump if the utilization level changes
+            comb_total_loop_size_init = comb_total_loop_size
+            if maximize_hardware_utilization and yield_count >= yield_count_limit+1:
+                # 2 means: only check the spatial mappings associated with the top 2 hardware utilization
                 # Modify "2" to other numbers if you want to check on more spatial mappings.
                 break
 

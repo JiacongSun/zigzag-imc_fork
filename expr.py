@@ -191,20 +191,26 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
     data = np.array(new_data)
 
     years = np.unique(data[:, 1]).astype(int).tolist()
+    paper_dios = data[:, 0].astype(str).tolist()
     imcs = ["AIMC", "DIMC"]
+    paper_idx_init = 0
     for i in range(len(imcs)):
-        for year_idx in range(len(years)):
+        # for year_idx in range(len(years)):
+        for paper_dio in range(len(paper_dios)):
             # filter result
             res = []
             year_options = data[:, 1].astype(int).tolist()
             imc_options = data[:, 2].astype(str).tolist()
-            for opi in range(len(year_options)):
-                if year_options[opi] == years[year_idx] and imc_options[opi] == imcs[i]:
-                    res.append(data[opi, :])
-            if len(res) == 0:
+            res.append(data[paper_dio, :])
+            if res[0][2] != imcs[i]:
                 continue
+            # for opi in range(len(year_options)):
+                # if year_options[opi] == years[year_idx] and imc_options[opi] == imcs[i]:
+                #     res.append(data[opi, :])
+            # if len(res) == 0:
+            #     continue
             res = np.array(res)
-
+            paper_idx_init += 1
             # calc carbon cost
             topsws = res[:, 5].astype(float).tolist()
             topss = res[:, 6].astype(float).tolist()
@@ -248,7 +254,7 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
                 embodied_carbon_fw_per_op = k2 * (period * 1000) * tops / topsmm2 / parallel  # period: unit: ns -> ps
                 # Convert unit to g, CO2/inference
                 embodied_carbon_ft = embodied_carbon_ft_per_op * op_per_task
-                embodied_carbon_fw = embodied_carbon_fw_per_op * op_per_task
+                embodied_carbon_fw = embodied_carbon_fw_per_op * parallel
 
                 cf_ft = operational_carbon + embodied_carbon_ft  # unit: g, carbon/task
                 cf_fw = operational_carbon + embodied_carbon_fw  # unit: g, carbon/task
@@ -262,7 +268,7 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
             # plot pie cf (fixed-time)
             pie_size = 200
             pie_colors = colors[1:3]
-            for x, y, ratio in zip(cf_fws, cf_fts, pie_cf_fts):
+            for x, y, ratio in zip(topsws, cf_fts, pie_cf_fts):
                 drawPieMarker(xs=[x],
                               ys=[y],
                               ratios=ratio,
@@ -271,12 +277,12 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
                               ax=pie_cf_ft_cur)
             pie_cf_ft_cur.set_xscale("log")
             pie_cf_ft_cur.set_yscale("log")
-            for x, y, tech in zip(cf_fws, cf_fts, res[:, 3].astype(int).tolist()):
-                pie_cf_ft_cur.text(x, 1.1*y, f"{tech} nm", ha="center", fontsize=font_size)
+            for x, y, tech in zip(topsws, cf_fts, res[:, 3].astype(int).tolist()):
+                pie_cf_ft_cur.text(x, 1.1*y, f"[{paper_idx_init}] {tech} nm", ha="center", fontsize=font_size)
 
             # plot pie cf (fixed-work)
             pie_size = 200
-            for x, y, ratio in zip(cf_fws, cf_fts, pie_cf_fws):
+            for x, y, ratio in zip(topsws, cf_fws, pie_cf_fws):
                 drawPieMarker(xs=[x],
                               ys=[y],
                               ratios=ratio,
@@ -285,19 +291,21 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
                               ax=pie_cf_fw_cur)
             pie_cf_fw_cur.set_xscale("log")
             pie_cf_fw_cur.set_yscale("log")
-            for x, y, tech in zip(cf_fws, cf_fts, res[:, 3].astype(int).tolist()):
-                pie_cf_fw_cur.text(x, 1.1*y, f"{tech} nm", ha="center", fontsize=font_size)
+            for x, y, tech in zip(topsws, cf_fws, res[:, 3].astype(int).tolist()):
+                pie_cf_fw_cur.text(x, 1.1*y, f"[{paper_idx_init}] {tech} nm", ha="center", fontsize=font_size)
 
     # configuration
     for i in range(0, fig_rows_nbs):
         for j in range(0, fig_cols_nbs):
-            axs[j].set_xlabel(f"g, CO$_2$/inference (fixed-work)", fontsize=font_size+5)
-            axs[j].set_ylabel(f"g, CO$_2$/inference (fixed-time)", fontsize=font_size+5)
-            axs[j].set_ylim([10**-11, 10**-9])
-            axs[j].set_xlim([10 ** -6, 2*10 ** -3])
+            # axs[j].set_xlabel(f"g, CO$_2$/inference (fixed-work)", fontsize=font_size+5)
+            axs[j].set_xlabel(f"TOP/s/W", fontsize=font_size + 5)
+            # axs[j].set_ylim([10**-11, 10**-9])
+            # axs[j].set_xlim([10 ** -6, 2*10 ** -3])
             axs[j].grid("both")
             axs[j].set_axisbelow(True)
             # axs[i][j].legend(loc="upper left")
+        axs[0].set_ylabel(f"g, CO$_2$/inference (CA)", fontsize=font_size+5)
+        axs[1].set_ylabel(f"g, CO$_2$/inference (PA)", fontsize=font_size + 5)
 
     # legend description
     # green: operational carbon footprint
@@ -1089,6 +1097,106 @@ def plot_carbon_breakdown_in_curve(i_df, acc_types, workload, sram_size=256*1024
     plt.tight_layout()
     plt.show()
 
+def scatter_performance(acc_types, sram_sizes, workload,
+                                   raw_data={}, d1_equal_d2=True, active_plot=True):
+    # This function is to plot carbon cost in entire exploration space in a scatter plot.
+    # The output figure consists of 4 subplots (x-axis: area):
+    # 1th (left): carbon footprint breakdown (fixed-time)
+    # 2th (right): carbon footprint breakdown (fixed-work)
+    colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+              u'#bcbd22', u'#17becf']
+    markers = ["s", "o", "^", "p", "D", "P"]
+    font_size = 15
+    df = raw_data["data"]
+    df = df[(df.workload == workload)]
+    periods = raw_data["periods"]
+    if d1_equal_d2:
+        dim_d1 = df.dim
+    else:
+        dim_d1 = df.dim // 8
+    df["imc"] = dim_d1.astype(str) + f"$\\times$" + df.dim.astype(str)  # D1 x D2
+    ## For active plotting using plotly.express
+    if active_plot:
+        df["dim_str"] = df["dim"].astype(str)
+        df["sram_size_KB"] = (df["sram_size"]/1024).astype(str)  # unit: B -> KB
+        if workload != "geo":
+            df["t_cf_ft_op"] = [x["opcf"] for x in df.cf_ft]
+            df["t_cf_ft_em"] = [x["soc_epa"]+x["soc_gpa"]+x["soc_mpa"]+x["dram"] for x in df.cf_ft]
+        fig = px.scatter(df, x="t_area", y="t_cf_ft_ex_pkg", color="sram_size_KB", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim"}, log_y=True, log_x=True)
+        ## add marker style
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="Scenario: continuously active",
+                          yaxis=dict(title="Carbon/task (exclude packaging) [g, CO2/task]"),
+                          xaxis=dict(title="Area (mm2)"))
+        fig.show()
+    else:
+        fig_rows_nbs = 1
+        fig_cols_nbs = 1
+        fig, axs = plt.subplots(nrows=fig_rows_nbs, ncols=fig_cols_nbs, figsize=(5, 4))
+        topsw_scatter = axs
+        marker_size = 50
+        for ii_a, a in enumerate(acc_types):
+            for ii_b, sram_size in enumerate(sram_sizes):
+                dims = sorted(list(set(df["dim"].to_list())))
+                for ii_c, dim in enumerate(dims):
+                    dff = df[(df.acc_type == a) & (df.sram_size == sram_size) & (df.dim == dim)]
+                    # Create positions for the bars on the x-axis
+                    area = dff.t_area.to_numpy()
+
+
+                    # Plot cf, simple (fixed-time)
+                    topsw = dff.topsw.to_numpy()
+                    cfft = dff.t_cf_ft_ex_pkg.to_numpy()
+                    cffw = dff.t_cf_fw_ex_pkg.to_numpy()
+                    tmp = raw_data["data"]
+                    geo_cfft_op = 1
+                    geo_cfft_em = 1
+                    geo_cffw_op = 1
+                    geo_cffw_em = 1
+                    for workload in ["ae", "ds_cnn", "resnet8", "mobilenet"]:
+                        tmp_wk = tmp[(tmp.workload == workload)]
+                        tmp_wk = tmp_wk[(tmp_wk.acc_type == a) & (tmp_wk.sram_size == sram_size) & (tmp_wk.dim == dim)]
+                        cfft_op = np.array([x["opcf"] for x in tmp_wk.cf_ft])
+                        cfft_em = np.array([x["soc_epa"]+x["soc_gpa"]+x["soc_mpa"]+x["dram"] for x in tmp_wk.cf_ft])
+                        cffw_op = np.array([x["opcf"] for x in tmp_wk.cf_fw])
+                        cffw_em = np.array([x["soc_epa"]+x["soc_gpa"]+x["soc_mpa"]+x["dram"] for x in tmp_wk.cf_fw])
+                        geo_cfft_op *= cfft_op
+                        geo_cfft_em *= cfft_em
+                        geo_cffw_op *= cffw_op
+                        geo_cffw_em *= cffw_em
+                    geo_cfft_op = geo_cfft_op ** 0.25
+                    geo_cfft_em = geo_cfft_em ** 0.25
+                    geo_cffw_op = geo_cffw_op ** 0.25
+                    geo_cffw_em = geo_cffw_em ** 0.25
+
+                    # topsw_scatter.scatter(area, topsw,
+                    # topsw_scatter.scatter(topsw, cfft,
+                    topsw_scatter.scatter(topsw, geo_cffw_op,
+                                          color="white", marker=markers[ii_a], edgecolors=colors[ii_b], s=marker_size)
+                    topsw_scatter.scatter(topsw, geo_cffw_em,
+                                          color=colors[ii_b], marker=markers[ii_a], edgecolors="black", s=marker_size)
+        # configuration
+        for i in range(0, fig_rows_nbs):
+            axs.set_xscale("log")
+            axs.set_yscale("log")
+            axs.grid(which="both")
+            axs.set_axisbelow(True)
+        # axs.set_xlabel(f"Area (mm$^2$)")
+        # axs.set_ylabel(f"TOP/s/W")
+        axs.set_xlabel(f"TOP/s/W")
+        axs.set_ylabel(f"g, CO2/inf (PA scenario)")
+        # axs[1][0].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-time)", fontsize=font_size * 1.2)
+        # axs[1][1].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-work)", fontsize=font_size * 1.2)
+        # axs[0][0].set_title(f"Simple task [{workload}]")
+        # axs[0][1].set_title(f"Simple task [{workload}]")
+        # axs[1][0].set_title(f"Complex task [{complexity}x {workload}]")
+        # axs[1][1].set_title(f"Complex task [{complexity}x {workload}]")
+
+        plt.tight_layout()
+        plt.show()
+
 def scatter_carbon_cost_four_cases(acc_types, sram_sizes, workload, complexity=50,
                                    raw_data={}, d1_equal_d2=True, active_plot=True):
     # This function is to plot carbon cost in entire exploration space in a scatter plot.
@@ -1111,6 +1219,9 @@ def scatter_carbon_cost_four_cases(acc_types, sram_sizes, workload, complexity=5
     if active_plot:
         df["dim_str"] = df["dim"].astype(str)
         df["sram_size_KB"] = (df["sram_size"]/1024).astype(str)  # unit: B -> KB
+        if workload != "geo":
+            df["t_cf_ft_op"] = [x["opcf"] for x in df.cf_ft]
+            df["t_cf_ft_em"] = [x["soc_epa"]+x["soc_gpa"]+x["soc_mpa"]+x["dram"] for x in df.cf_ft]
         # ans=df[(df.sram_size==8*1024) | (df.dim==32)]  # for breakdown
         # if workload != "geo":
         #     ans["opcf_ft"] = [x["opcf"] for x in ans.cf_ft]
@@ -1170,6 +1281,15 @@ def scatter_carbon_cost_four_cases(acc_types, sram_sizes, workload, complexity=5
         fig.update_layout(title="Carbon: periodic active vs. continuous active",
                           yaxis=dict(title="Carbon/task (PA) [g, CO2/task]"),
                           xaxis=dict(title="Carbon/task (CA) [g, CO2/task]"))
+        fig.show()
+        ## cf_ft (y) vs. topsw (x)
+        fig = px.scatter(df, x="topsw", y="t_cf_ft", color="sram_size_KB", symbol="acc_type",
+                         hover_data={"acc_type", "sram_size_KB", "dim", "t_area"}, log_x=True, log_y=True)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')),
+                          selector=dict(mode='markers'))
+        fig.update_layout(title="Carbon [continuous active] vs. TOP/s/W",
+                          yaxis=dict(title="Carbon/task (CA) [g, CO2/task]"),
+                          xaxis=dict(title="TOP/s/W"))
         fig.show()
         breakpoint()
     else:
@@ -2552,11 +2672,120 @@ def experiment_1_literature_trend():
     # plot_carbon_footprint_across_years_in_literature(data=data,
     #                                                  period=10**9/3.7,  # unit: ns
     #                                                  op_per_task=10535996 * 2)  # unit: ops/inference
+    plot_carbon_footprint_in_literature(data=data,
+                          period=10 ** 9 / 3.7,  # unit: ns
+                          op_per_task=10535996 * 2)  # unit: ops/inference (mlperf-tiny)
+
     # plot_carbon_footprint_in_literature(data=data,
-    #                       period=10 ** 9 / 3.7,  # unit: ns
-    #                       op_per_task=10535996 * 2)  # unit: ops/inference
-    plot_area_trend_in_literature(data=data)
+    #                                     period=10 ** 9 / 25,  # unit: ns
+    #                                     op_per_task=6101039461)  # unit: ops/inference (mlperf-mobile)
+    # plot_area_trend_in_literature(data=data)
     breakpoint()
+
+def simulation_for_localmemoryloop_feature(acc_types, periods, dram_ac_cost_per_bit,
+                                           possible_dram_energy_removal, size_workloads, d1_equal_d2,):
+    workload_suit = "localloop"
+    pkl_name = "expr_res_tiny_wo_localloop.pkl"
+    dram_size = 1 / 1024  # 1MB. unit: GB
+    workloads = ["ds_cnn"]
+    sram_sizes = [128 * 1024]  # unit: B
+    Dimensions = [32]
+    zigzag_similation_and_result_storage(workloads=workloads, acc_types=acc_types, sram_sizes=sram_sizes,
+                                         Dimensions=Dimensions, periods=periods, pkl_name=pkl_name,
+                                         dram_size=dram_size, dram_ac_cost_per_bit=dram_ac_cost_per_bit,
+                                         possible_dram_energy_removal=possible_dram_energy_removal,
+                                         size_workloads=size_workloads,
+                                         d1_equal_d2=d1_equal_d2, workload_suit=workload_suit)
+    print("special simulation done.")
+
+def bar_localmemoryloop(df):
+    # case:
+    # ds_cnn, 128KB SRAM, dim: 128, acc: pdigital_os
+    fig_rows_nbs = 1
+    fig_cols_nbs = 1
+    fig, axs = plt.subplots(nrows=fig_rows_nbs, ncols=fig_cols_nbs, figsize=(5, 4))
+    res_wo_localloop = read_pickle("expr_res_tiny_woo_localloop.pkl").iloc[0]
+    res_w_localloop = df[(df.workload=="ds_cnn")&(df.acc_type=="DIMC")&(df.dim==32)&(df.sram_size==128*1024)].iloc[0]
+    colors = [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728', u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+              u'#bcbd22', u'#17becf']
+    markers = ["s", "o", "^", "p"]
+    width = 0.15
+    font_size = 15
+
+    # calc energy
+    res_wo_localloop_energy_total = res_wo_localloop.cme[0][0].energy_total
+    res_wo_localloop_dram_energy = 0
+    res_w_localloop_dram_energy = 0
+    for mem_op in ["O", "W", "I"]:
+        if mem_op == "W":
+            en_dram_wo = res_wo_localloop.cme[0][0].mem_energy_breakdown[mem_op][1]
+            en_dram_w = res_w_localloop.cme[0][0].mem_energy_breakdown[mem_op][1]
+        else:
+            en_dram_wo = res_wo_localloop.cme[0][0].mem_energy_breakdown[mem_op][2]
+            try:
+                en_dram_wo = res_w_localloop.cme[0][0].mem_energy_breakdown[mem_op][2]
+            except:
+                en_dram_w = 0
+        res_wo_localloop_dram_energy += en_dram_wo
+        res_w_localloop_dram_energy += en_dram_w
+    res_wo_localloop_on_chip_energy = (res_wo_localloop_energy_total - res_wo_localloop_dram_energy) / res_wo_localloop_energy_total
+    res_wo_localloop_dram_energy /= res_wo_localloop_energy_total
+    res_w_localloop_on_chip_energy = res_w_localloop.cme[0][0].energy_total / res_wo_localloop_energy_total
+    res_w_localloop_dram_energy /= res_wo_localloop_energy_total
+
+    # calc carbon (CA)
+    res_wo_localloop_opcf_ca = res_wo_localloop.cf_ft["opcf"]
+    res_w_localloop_opcf_ca = res_w_localloop.cf_ft["opcf"]
+    res_wo_localloop_emcf_ca = res_wo_localloop.cf_ft["soc_epa"] + res_wo_localloop.cf_ft["soc_mpa"] + res_wo_localloop.cf_ft["soc_gpa"]
+    res_w_localloop_emcf_ca = res_w_localloop.cf_ft["soc_epa"] + res_w_localloop.cf_ft["soc_mpa"] + res_w_localloop.cf_ft["soc_gpa"]
+    carbon_wo_total_ca = res_wo_localloop_opcf_ca + res_wo_localloop_emcf_ca
+    res_wo_localloop_opcf_ca /= carbon_wo_total_ca
+    res_w_localloop_opcf_ca /= carbon_wo_total_ca
+    res_wo_localloop_emcf_ca /= carbon_wo_total_ca
+    res_w_localloop_emcf_ca /= carbon_wo_total_ca
+
+    # calc carbon (PA)
+    res_wo_localloop_opcf_pa = res_wo_localloop.cf_fw["opcf"]
+    res_w_localloop_opcf_pa = res_w_localloop.cf_fw["opcf"]
+    res_wo_localloop_emcf_pa = res_wo_localloop.cf_fw["soc_epa"] + res_wo_localloop.cf_fw["soc_mpa"] + \
+                               res_wo_localloop.cf_fw["soc_gpa"]
+    res_w_localloop_emcf_pa = res_w_localloop.cf_fw["soc_epa"] + res_w_localloop.cf_fw["soc_mpa"] + \
+                              res_w_localloop.cf_fw["soc_gpa"]
+    carbon_wo_total_pa = res_wo_localloop_opcf_pa + res_wo_localloop_emcf_pa
+    res_wo_localloop_opcf_pa /= carbon_wo_total_pa
+    res_w_localloop_opcf_pa /= carbon_wo_total_pa
+    res_wo_localloop_emcf_pa /= carbon_wo_total_pa
+    res_w_localloop_emcf_pa /= carbon_wo_total_pa
+
+    x_pos = np.arange(3)
+    # plot wo
+    base = [0 for x in range(3)]
+    val = np.array([res_wo_localloop_on_chip_energy, res_wo_localloop_opcf_ca, res_wo_localloop_opcf_pa])
+    axs.bar(x_pos - width/2, val, width, label="w/o", bottom=base, color=colors[1],
+                   edgecolor="black")
+    base = base + val
+    val = np.array([res_wo_localloop_dram_energy, res_wo_localloop_emcf_ca, res_wo_localloop_emcf_pa])
+    axs.bar(x_pos - width/2, val, width, label=None, bottom=base, color=colors[2],
+                   edgecolor="black")
+    # plot w
+    base = [0 for x in range(3)]
+    val = np.array([res_w_localloop_on_chip_energy, res_w_localloop_opcf_ca, res_w_localloop_opcf_pa])
+    axs.bar(x_pos + width/2, val, width, label="w", bottom=base, color=colors[1],
+            edgecolor="black")
+    base = base + val
+    val = np.array([res_w_localloop_dram_energy, res_w_localloop_emcf_ca, res_w_localloop_emcf_pa])
+    axs.bar(x_pos + width/2, val, width, label=None, bottom=base, color=colors[2],
+            edgecolor="black")
+
+
+    # configuration
+    # axs.legend(loc="upper left")
+    axs.grid(which="both")
+    axs.set_axisbelow(True)
+    axs.set_ylabel(f"Normalized energy", fontsize=font_size)
+
+    plt.tight_layout()
+    plt.show()
 
 def save_as_pickle(df, filename):
     with open(filename, "wb") as fp:
@@ -2580,6 +2809,7 @@ if __name__ == "__main__":
     #########################################
     ## Experiment 1: carbon for papers in literature
     # experiment_1_literature_trend()
+    # breakpoint()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -2613,11 +2843,26 @@ if __name__ == "__main__":
     ############# simulation button #############
     pickle_exist = True  # False: start simulation; False: check output
 
-    ############# debugging #############
-    # workload_suits = ["mobile"]
-    # debug_dram_size = 25/1024
-    # debug_sram_sizes = [512 * 1024]
+    ############# simulation debugging #############
+    # workload_suits = ["resnet8"]
+    # debug_dram_size = 1/1024  # GB
+    # debug_sram_sizes = [32 * 1024]  # KB
+    # Dimensions = [128]
+    # acc_types = ["pdigital_ws"]
     # pickle_exist = False
+    if False:
+        simulation_for_localmemoryloop_feature(acc_types=["DIMC"],
+                                               periods=periods,
+                                               dram_ac_cost_per_bit=dram_ac_cost_per_bit,
+                                               possible_dram_energy_removal=possible_dram_energy_removal,
+                                               size_workloads=size_workloads,
+                                               d1_equal_d2=False,
+                                               )
+        breakpoint()
+
+    df = read_pickle("expr_res_tiny_wo_localloop.pkl")
+    bar_localmemoryloop(df)
+    breakpoint()
 
     if pickle_exist == False:
         #########################################
@@ -2648,16 +2893,16 @@ if __name__ == "__main__":
                                                  d1_equal_d2=d1_equal_d2, workload_suit=workload_suit)
     else:
         ## Step 1: load df from pickle
-        workload_suit = "mobile"
+        workload_suit = "tiny"
 
         if workload_suit == "tiny":
             df = read_pickle("no_cme_expr_res_tiny.pkl")
-            workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]
+            workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]  # legal workload keywords
             sram_sizes = [8 * 1024, 32 * 1024, 128 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
             workloads.append("geo")  # append geo so that plotting for geo is also supported
         elif workload_suit == "mobile":
             df = read_pickle("no_cme_expr_res_mobile.pkl")
-            workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]
+            workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]  # legal workload keywords
             sram_sizes = [512 * 1024 * 1024, 1 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024,
                           64 * 1024 * 1024]  # unit: B
             workloads.append("geo")  # append geo so that plotting for geo is also supported
@@ -2693,7 +2938,9 @@ if __name__ == "__main__":
         raw_data = {"data": df, "workloads": workloads, "periods": periods,}
         # plot_total_carbon_curve_four_cases(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, complexity=13, raw_data=raw_data, plot_breakdown=True, d1_equal_d2=True)
         ## (5) plot carbon in scatter across 4 scenarios (can include the sweep for different sram size)
-        scatter_carbon_cost_four_cases(acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        # scatter_carbon_cost_four_cases(acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, complexity=50, raw_data=raw_data, d1_equal_d2=True, active_plot=True)
+        acc_types = ["pdigital_os", "DIMC"]
+        scatter_performance(acc_types=acc_types, sram_sizes=sram_sizes, workload=workload, raw_data=raw_data, d1_equal_d2=True, active_plot=False)
         breakpoint()
 
         #######################

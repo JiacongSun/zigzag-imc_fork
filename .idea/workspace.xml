@@ -7,12 +7,8 @@
     <list default="true" id="1b4fd860-b9e8-491d-8907-63be57d4edbf" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/expr.py" beforeDir="false" afterPath="$PROJECT_DIR$/expr.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/expr_res_mobile.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/expr_res_mobile.pkl" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/no_cme_expr_res_mobile.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/no_cme_expr_res_mobile.pkl" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/zigzag/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/api.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/zigzag/classes/stages/SpatialMappingConversionStage.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/classes/stages/SpatialMappingConversionStage.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/zigzag/classes/stages/SpatialMappingGeneratorStage.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/classes/stages/SpatialMappingGeneratorStage.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/zigzag/classes/stages/WorkloadStage.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/classes/stages/WorkloadStage.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/zigzag/classes/opt/spatial/generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/classes/opt/spatial/generator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/zigzag/classes/stages/SearchUnusedMemoryStage.py" beforeDir="false" afterPath="$PROJECT_DIR$/zigzag/classes/stages/SearchUnusedMemoryStage.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
