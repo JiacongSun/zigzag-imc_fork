@@ -180,13 +180,6 @@ class demo:
                                         color=colors[ii_b], marker=markers[ii_a], edgecolors="black", s=marker_size)
                     else:
                         pass
-
-                    # topsw_scatter.scatter(area, topsw,
-                    # topsw_scatter.scatter(topsw, cfft,
-                    # ax.scatter(topsw, geo_cffw_op,
-                    #                       color="white", marker=markers[ii_a], edgecolors=colors[ii_b], s=marker_size)
-                    # self.ax.scatter(topsw, cfft,
-                    #                       color=colors[ii_b], marker=markers[ii_a], edgecolors="black", s=marker_size)
         # configuration
         self.ax.set_xscale("log")
         self.ax.set_yscale("log")
