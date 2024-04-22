@@ -1173,9 +1173,9 @@ def scatter_performance(acc_types, sram_sizes, workload,
 
                     # topsw_scatter.scatter(area, topsw,
                     # topsw_scatter.scatter(topsw, cfft,
-                    topsw_scatter.scatter(topsw, geo_cffw_op,
-                                          color="white", marker=markers[ii_a], edgecolors=colors[ii_b], s=marker_size)
-                    topsw_scatter.scatter(topsw, geo_cffw_em,
+                    # topsw_scatter.scatter(topsw, geo_cffw_op,
+                    #                       color="white", marker=markers[ii_a], edgecolors=colors[ii_b], s=marker_size)
+                    topsw_scatter.scatter(topsw, cfft,
                                           color=colors[ii_b], marker=markers[ii_a], edgecolors="black", s=marker_size)
         # configuration
         for i in range(0, fig_rows_nbs):
@@ -1186,7 +1186,7 @@ def scatter_performance(acc_types, sram_sizes, workload,
         # axs.set_xlabel(f"Area (mm$^2$)")
         # axs.set_ylabel(f"TOP/s/W")
         axs.set_xlabel(f"TOP/s/W")
-        axs.set_ylabel(f"g, CO2/inf (PA scenario)")
+        axs.set_ylabel(f"g, CO2/inf (CA scenario)")
         # axs[1][0].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-time)", fontsize=font_size * 1.2)
         # axs[1][1].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-work)", fontsize=font_size * 1.2)
         # axs[0][0].set_title(f"Simple task [{workload}]")
@@ -2581,6 +2581,9 @@ def zigzag_similation_and_result_storage(workloads: list, acc_types: list, sram_
                     data_vals.append(new_res)
 
                 if workloads != ["resnet18"]:
+                    geo_ops = geo_ops ** (1 / 4)
+                    geo_lat = geo_lat ** (1 / 4)
+                    geo_en = geo_en  ** (1 / 4)
                     geo_topsw = geo_topsw ** (1 / 4)  # each suit has 4 networks
                     geo_tops = geo_tops ** (1 / 4)
                     geo_topsmm2 = geo_topsmm2 ** (1 / 4)
@@ -2850,15 +2853,15 @@ if __name__ == "__main__":
     # Dimensions = [128]
     # acc_types = ["pdigital_ws"]
     # pickle_exist = False
-    if False:
-        simulation_for_localmemoryloop_feature(acc_types=["DIMC"],
-                                               periods=periods,
-                                               dram_ac_cost_per_bit=dram_ac_cost_per_bit,
-                                               possible_dram_energy_removal=possible_dram_energy_removal,
-                                               size_workloads=size_workloads,
-                                               d1_equal_d2=False,
-                                               )
-        breakpoint()
+    # if False:
+    #     simulation_for_localmemoryloop_feature(acc_types=["DIMC"],
+    #                                            periods=periods,
+    #                                            dram_ac_cost_per_bit=dram_ac_cost_per_bit,
+    #                                            possible_dram_energy_removal=possible_dram_energy_removal,
+    #                                            size_workloads=size_workloads,
+    #                                            d1_equal_d2=False,
+    #                                            )
+    #     breakpoint()
 
     # df = read_pickle("expr_res_tiny_wo_localloop.pkl")
     # bar_localmemoryloop(df)
@@ -2875,10 +2878,11 @@ if __name__ == "__main__":
                 sram_sizes = [8 * 1024, 32 * 1024, 128 * 1024, 512 * 1024, 1024 * 1024]  # unit: B
             elif workload_suit == "mobile":
                 pkl_name = "expr_res_mobile.pkl"
+                # pkl_name = "expr_res_mobile_append.pkl"
                 dram_size = 25 / 1024  # 20MB. unit: GB
                 workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]
-                # sram_sizes = [512*1024*1024, 1*1024*1024, 4*1024*1024, 16*1024*1024, 64*1024*1024]  # unit: B
-                sram_sizes = [1 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024]
+                sram_sizes = [1*1024*1024, 4*1024*1024, 16*1024*1024, 64*1024*1024, 512*1024*1024]  # unit: B
+                # sram_sizes = [64 * 1024 * 1024, 512 * 1024 * 1024]
             else:  # left for debug mode
                 pkl_name = f"expr_res_{workload_suit}.pkl"
                 dram_size = debug_dram_size  # unit: GB
@@ -2893,7 +2897,7 @@ if __name__ == "__main__":
                                                  d1_equal_d2=d1_equal_d2, workload_suit=workload_suit)
     else:
         ## Step 1: load df from pickle
-        workload_suit = "tiny"
+        workload_suit = "mobile"
 
         if workload_suit == "tiny":
             df = read_pickle("no_cme_expr_res_tiny.pkl")
@@ -2903,8 +2907,7 @@ if __name__ == "__main__":
         elif workload_suit == "mobile":
             df = read_pickle("no_cme_expr_res_mobile.pkl")
             workloads = ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]  # legal workload keywords
-            sram_sizes = [512 * 1024 * 1024, 1 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024,
-                          64 * 1024 * 1024]  # unit: B
+            sram_sizes = [1 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024]  # unit: B
             workloads.append("geo")  # append geo so that plotting for geo is also supported
         else:  # debugging branch
             df = read_pickle(f"expr_res_{workload_suit}.pkl")
