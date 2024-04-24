@@ -193,7 +193,6 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
     years = np.unique(data[:, 1]).astype(int).tolist()
     paper_dios = data[:, 0].astype(str).tolist()
     imcs = ["AIMC", "DIMC"]
-    paper_idx_init = 0
     for i in range(len(imcs)):
         # for year_idx in range(len(years)):
         for paper_dio in range(len(paper_dios)):
@@ -210,7 +209,7 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
             # if len(res) == 0:
             #     continue
             res = np.array(res)
-            paper_idx_init += 1
+            paper_cit_idx = res[:, 12].astype(int).tolist()[0]
             # calc carbon cost
             topsws = res[:, 5].astype(float).tolist()
             topss = res[:, 6].astype(float).tolist()
@@ -280,7 +279,7 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
             pie_cf_ft_cur.set_xscale("log")
             pie_cf_ft_cur.set_yscale("log")
             for x, y, tech in zip(topsws, cf_fts, res[:, 3].astype(int).tolist()):
-                pie_cf_ft_cur.text(x, 1.1*y, f"[{paper_idx_init}] {tech} nm", ha="center", fontsize=font_size)
+                pie_cf_ft_cur.text(x, 1.1*y, f"[{paper_cit_idx}] {tech} nm", ha="center", fontsize=font_size)
 
             # plot pie cf (fixed-work)
             pie_size = 200
@@ -294,7 +293,7 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
             pie_cf_fw_cur.set_xscale("log")
             pie_cf_fw_cur.set_yscale("log")
             for x, y, tech in zip(topsws, cf_fws, res[:, 3].astype(int).tolist()):
-                pie_cf_fw_cur.text(x, 1.1*y, f"[{paper_idx_init}] {tech} nm", ha="center", fontsize=font_size)
+                pie_cf_fw_cur.text(x, 1.1*y, f"[{paper_cit_idx}] {tech} nm", ha="center", fontsize=font_size)
 
     # configuration
     for i in range(0, fig_rows_nbs):
@@ -2179,12 +2178,16 @@ def plot_area_trend_in_literature(data):
     netsizes = data[:, 11].tolist()  # unit: B
     array_parallelisms = data[:, 8].tolist()  # unit: #ops/cycle
     topsws = data[:, 5].tolist()
+    dois = data[:, 0].tolist()
+    cit_idxs = data[:, 12].tolist()  # paper citation idx
     # remove elements when netsize is None
     clean_netsizes = []
     clean_areas = []
     clean_techs = []
     clean_parallelisms = []
     clean_topsws = []
+    clean_dois = []
+    clean_idxs = []
     for idx in range(len(netsizes)):
         if netsizes[idx] is not None and areas_input[idx] is not None:
             # exclude the case for Transformer
@@ -2193,6 +2196,8 @@ def plot_area_trend_in_literature(data):
             clean_techs.append(techs[idx])
             clean_parallelisms.append(array_parallelisms[idx])
             clean_topsws.append(topsws[idx])
+            clean_dois.append(dois[idx])
+            clean_idxs.append(cit_idxs[idx])
         else:
             continue
     # scale area to 28nm according to techs
@@ -2215,6 +2220,8 @@ def plot_area_trend_in_literature(data):
     areas_sorted = [area_scaled[i] for i in sorted_indices]
     parallelisms_sorted = [clean_parallelisms[i] for i in sorted_indices]
     topsws_sorted = [clean_topsws[i] for i in sorted_indices]
+    dois_sorted = [clean_dois[i] for i in sorted_indices]
+    cit_idxs_sorted = [clean_idxs[i] for i in sorted_indices]
 
     ####################
     # plot figures
@@ -2225,10 +2232,12 @@ def plot_area_trend_in_literature(data):
     fontsize = 24
     ax.scatter(netsizes_sorted, topsws_sorted, s=blob_area, marker="o", edgecolors="black", c=colors)
     ax.scatter(netsizes_sorted, topsws_sorted, s=2, marker="o", c="white")
+    print(dois_sorted)
 
-    ## text to label #parallelism
-    # for x, y, txt in zip(netsizes_sorted, topsws_sorted, parallelisms_sorted):
-    #     ax.text(x, y, f"({int(txt)})", ha="center", fontsize=18)
+    # text to label #parallelism
+    for x, y, cit_idx in zip(netsizes_sorted, topsws_sorted, cit_idxs_sorted):
+        if cit_idx != 8:
+            ax.text(1.1 * x, y, f"[{cit_idx}]", ha="center", fontsize=12)
 
     ## Plot legend blobs
     legend_x = np.asarray([2, 5, 10, 30, 80])
@@ -2647,32 +2656,32 @@ def experiment_1_literature_trend():
 
     ## Papers
     data = np.array([
-            #           DOI                                             Year    IMC  Tech  topsw(peak)                      topsmm2 (peak)              #ops/cycle (peak)                   area(die) (mm2)
+            #           DOI                                             Year    IMC  Tech  topsw(peak)                      topsmm2 (peak)              #ops/cycle (peak)                   area(die) (mm2)             paper_citation_idx
             #                                                                            Pres               tops(peak)                                                  area (macro) (mm2)                  targeted network size (B)
-            ["10.1109/ISSCC42613.2021.9365766",                         2021, "DIMC", 22, 8, 24.7,           0.917,             0.917/0.202,              64*1024/8/8,       0.202,             None,       None],
-            ["10.1109/ISSCC42614.2022.9731762",                         2022, "DIMC", 28, 8, 30.8,           1.35,              1.43,                     12*8*1024/8/8,     1.35/1.43,         6.69,       25.6*1024*1024],   # resnet50
-            ["10.1109/ISSCC42614.2022.9731754",                         2022, "DIMC", 5,  8, 63,             2.95/4,            55,                       8*8*1024/8/8,      (2.95/4)/55,       None,       None],
-            ["10.1109/ISSCC42614.2022.9731645",                         2022, "DIMC", 28, 8, 12.5,           1.48,              0.221,                    24*8*1024/8/8,     1.48/0.221,        6.8266,     108*1024*1024],  # BERT-Base (Transformer)
-            ["10.1109/JSSC.2021.3061508",                               2021, "DIMC", 65, 8, 2.06*4,         0.006*4,           0.006*4/0.2272,           2*8*1024/8/8,      0.2272,            1,          60*1024],  # LeNet-5
-            ["10.1109/VLSITechnologyandCir46769.2022.9830438",          2022, "DIMC", 12, 8, 30.3,           0.336,             41.6/4,                   1*8*1024/8/8,      0.336/(41.6/4),    None,       None],
-            ["10.1109/ISSCC42614.2022.9731545",                         2022, "DIMC", 28, 8, 27.38,          0.0055,            0.0055/0.03,              4*8*1024/8/8,      0.03,              None,       None],
-            ["10.1109/ISSCC42614.2022.9731659",                         2022, "DIMC", 28, 8, 1108/64,        9.175/64,          9.175/64/0.033,           2*8*1024/8/8,      0.033,             1,          None],
-            ["10.1109/ESSCIRC59616.2023.10268774",                      2023, "DIMC", 16, 8, 23.8,           0.182,             0.364,                    128*8*1024/8/8,    0.182/0.364,       0.5056,     None],  # Weijie's design
-            ["10.1109/ISSCC42613.2021.9365788",                         2021, "AIMC", 16, 8, 30.25,          2.95,              0.118,                    589*8*1024/8/8,    2.95/0.118,        25,         25.6*1024*1024],  # resnet50
-            ["10.1109/ESSCIRC59616.2023.10268725",                      2023, "DIMC", 28, 8, 22.4,           1.46*0.0159,       1.46,                     2*8*1024/8/8,      0.0159,            None,       None],
-            ["10.1109/ISSCC42615.2023.10067360",                        2023, "DIMC", 28, 8, 2.52,           3.33,              0.85,                     144*8*1024/8/8,    3.33/0.85,         3.93,       None],
-            ["10.1109/ISSCC19947.2020.9062985",                         2020, "AIMC", 7,  8, 321/4,          0.455/4,           0.455/4/0.0032,           0.5*8*1024/8/8,    0.0032,            None,       None],
-            ["10.1109/CICC51472.2021.9431575",                          2021, "AIMC", 22, 8, 1050/16,        23.5/16,           12.1/16,                  64*8*1024/8/8,     23.5/12.1,         4.02,       None],
-            ["10.1109/CICC57935.2023.10121308",                         2023, "DIMC", 28, 8, 711/2/8,        1.152/16,          1.152/16/(0.636*0.148),   1.152*8*1024/8/8, (0.636*0.148),      None,       268346/2],  # 4b resnet20
-            ["10.1109/CICC57935.2023.10121243",                         2023, "AIMC", 65, 8, 1.4,            1.104/64,          1.104/64/7,               16*8*1024/8/8,     7,                 7,          268346],  # 4-8b resnet20
-            ["10.1109/CICC57935.2023.10121221",                         2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318,             1.25,                     32*8*1024/8/8,     0.318/1.25,        2.03,       77360],
-            ["10.1109/CICC57935.2023.10121213",                         2023, "AIMC", 65, 8, 95.4*(9/64),    0.8136*(9/64),     0.8136*(9/64)/0.26,       13.5*8*1024/8/8,   0.26,              None,       None],
-            ["10.1109/JSSC.2020.3005754",                               2020, "AIMC", 55, 8, 0.6,            0.00514,           0.00514/(2.34*2.54),      0.5*8*1024/8/8,    (2.34*2.54),       5.9436,     268346/8],  # binary resnet20
-            ["10.23919/VLSICircuits52068.2021.9492444",                 2021, "AIMC", 28, 8, 5796/64,        6.144/64,          6.144/64/0.51,            36.8*8*1024/8/8,   0.51,              None,       8970],  # custom networks
-            ["https://ieeexplore.ieee.org/abstract/document/9508673",   2021, "DIMC", 28, 8, 588/64,         4.9/64,            4.9/64/20.9,              432*8*1024/8/8,    20.9,              20.9,       11.7*1024*1024/8],  # resnet18
-            ["10.1109/ISSCC42614.2022.9731657",                         2022, "AIMC", 28, 8, 45.7/2*3/8,     0.97/2*3/8,        0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8,    (0.436*0.212),     8.702,      16*1024*1024],  # YOLO-Tiny
-            ["10.1109/TCSI.2023.3244338",                               2023, "AIMC", 28, 8, 16.1/4,         0.0128/4,          0.0128/4/(0.22*0.26),     2*8*1024/8/8,      (0.22*0.26),       None,       5642],  # custom network
-            ["10.1109/TCSI.2023.3241385",                               2023, "AIMC", 28, 8, 942.9/4/8,      59.584/4/8*0.0385, 59.584/4/8,               2*8*1024/8/8,     0.0385,             None,       None],
+            ["10.1109/ISSCC42613.2021.9365766",                         2021, "DIMC", 22, 8, 24.7,           0.917,             0.917/0.202,              64*1024/8/8,       0.202,             None,       None,               22],
+            ["10.1109/ISSCC42614.2022.9731762",                         2022, "DIMC", 28, 8, 30.8,           1.35,              1.43,                     12*8*1024/8/8,     1.35/1.43,         6.69,       25.6*1024*1024,     8],   # resnet50
+            ["10.1109/ISSCC42614.2022.9731754",                         2022, "DIMC", 5,  8, 63,             2.95/4,            55,                       8*8*1024/8/8,      (2.95/4)/55,       None,       None,               23],
+            ["10.1109/ISSCC42614.2022.9731645",                         2022, "DIMC", 28, 8, 12.5,           1.48,              0.221,                    24*8*1024/8/8,     1.48/0.221,        6.8266,     108*1024*1024,      10],  # BERT-Base (Transformer)
+            ["10.1109/JSSC.2021.3061508",                               2021, "DIMC", 65, 8, 2.06*4,         0.006*4,           0.006*4/0.2272,           2*8*1024/8/8,      0.2272,            1,          60*1024,            3],  # LeNet-5
+            ["10.1109/VLSITechnologyandCir46769.2022.9830438",          2022, "DIMC", 12, 8, 30.3,           0.336,             41.6/4,                   1*8*1024/8/8,      0.336/(41.6/4),    None,       None,               24],
+            ["10.1109/ISSCC42614.2022.9731545",                         2022, "DIMC", 28, 8, 27.38,          0.0055,            0.0055/0.03,              4*8*1024/8/8,      0.03,              None,       None,               25],
+            ["10.1109/ISSCC42614.2022.9731659",                         2022, "DIMC", 28, 8, 1108/64,        9.175/64,          9.175/64/0.033,           2*8*1024/8/8,      0.033,             1,          None,               26],
+            ["10.1109/ESSCIRC59616.2023.10268774",                      2023, "DIMC", 16, 8, 23.8,           0.182,             0.364,                    128*8*1024/8/8,    0.182/0.364,       0.5056,     None,               27],  # Weijie's design
+            ["10.1109/ISSCC42613.2021.9365788",                         2021, "AIMC", 16, 8, 30.25,          2.95,              0.118,                    589*8*1024/8/8,    2.95/0.118,        25,         25.6*1024*1024,     9],  # resnet50
+            ["10.1109/ESSCIRC59616.2023.10268725",                      2023, "DIMC", 28, 8, 22.4,           1.46*0.0159,       1.46,                     2*8*1024/8/8,      0.0159,            None,       None,               28],
+            ["10.1109/ISSCC42615.2023.10067360",                        2023, "DIMC", 28, 8, 2.52,           3.33,              0.85,                     144*8*1024/8/8,    3.33/0.85,         3.93,       None,               29],
+            ["10.1109/ISSCC19947.2020.9062985",                         2020, "AIMC", 7,  8, 321/4,          0.455/4,           0.455/4/0.0032,           0.5*8*1024/8/8,    0.0032,            None,       None,               17],
+            ["10.1109/CICC51472.2021.9431575",                          2021, "AIMC", 22, 8, 1050/16,        23.5/16,           12.1/16,                  64*8*1024/8/8,     23.5/12.1,         4.02,       None,               18],
+            ["10.1109/CICC57935.2023.10121308",                         2023, "DIMC", 28, 8, 711/2/8,        1.152/16,          1.152/16/(0.636*0.148),   1.152*8*1024/8/8, (0.636*0.148),      None,       268346/2,           30],  # 4b resnet20
+            ["10.1109/CICC57935.2023.10121243",                         2023, "AIMC", 65, 8, 1.4,            1.104/64,          1.104/64/7,               16*8*1024/8/8,     7,                 7,          268346,             5],  # 4-8b resnet20
+            ["10.1109/CICC57935.2023.10121221",                         2023, "DIMC", 28, 8, 40.16*(1/0.36), 0.318,             1.25,                     32*8*1024/8/8,     0.318/1.25,        2.03,       77360,              4],
+            ["10.1109/CICC57935.2023.10121213",                         2023, "AIMC", 65, 8, 95.4*(9/64),    0.8136*(9/64),     0.8136*(9/64)/0.26,       13.5*8*1024/8/8,   0.26,              None,       None,               -1],
+            ["10.1109/JSSC.2020.3005754",                               2020, "AIMC", 55, 8, 0.6,            0.00514,           0.00514/(2.34*2.54),      0.5*8*1024/8/8,    (2.34*2.54),       5.9436,     268346/8,           2],  # binary resnet20
+            ["10.23919/VLSICircuits52068.2021.9492444",                 2021, "AIMC", 28, 8, 5796/64,        6.144/64,          6.144/64/0.51,            36.8*8*1024/8/8,   0.51,              None,       8970,               19],  # custom networks
+            ["https://ieeexplore.ieee.org/abstract/document/9508673",   2021, "DIMC", 28, 8, 588/64,         4.9/64,            4.9/64/20.9,              432*8*1024/8/8,    20.9,              20.9,       11.7*1024*1024/8,   6],  # resnet18
+            ["10.1109/ISSCC42614.2022.9731657",                         2022, "AIMC", 28, 8, 45.7/2*3/8,     0.97/2*3/8,        0.97/2*3/8/(0.436*0.212), 170*8*1024/8/8,    (0.436*0.212),     8.702,      16*1024*1024,       7],  # YOLO-Tiny
+            ["10.1109/TCSI.2023.3244338",                               2023, "AIMC", 28, 8, 16.1/4,         0.0128/4,          0.0128/4/(0.22*0.26),     2*8*1024/8/8,      (0.22*0.26),       None,       5642,               20],  # custom network
+            ["10.1109/TCSI.2023.3241385",                               2023, "AIMC", 28, 8, 942.9/4/8,      59.584/4/8*0.0385, 59.584/4/8,               2*8*1024/8/8,     0.0385,             None,       None,               21],
         ])
 
     ## Step 3: plot carbon cost in literature
@@ -2686,7 +2695,7 @@ def experiment_1_literature_trend():
     # plot_carbon_footprint_in_literature(data=data,
     #                                     period=10 ** 9 / 25,  # unit: ns
     #                                     op_per_task=6101039461)  # unit: ops/inference (mlperf-mobile)
-    # plot_area_trend_in_literature(data=data)
+    plot_area_trend_in_literature(data=data)
     breakpoint()
 
 def simulation_for_localmemoryloop_feature(acc_types, periods, dram_ac_cost_per_bit,
@@ -2815,8 +2824,8 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    # experiment_1_literature_trend()
-    # breakpoint()
+    experiment_1_literature_trend()
+    breakpoint()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
