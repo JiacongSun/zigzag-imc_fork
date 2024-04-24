@@ -217,6 +217,8 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
             topsmm2s = res[:, 7].astype(float).tolist()
             paralls = res[:, 8].astype(float).tolist()  # ops/cycle
             techs = res[:, 3].astype(int).tolist()
+            paper_idx = res[:, 0].astype(str).tolist()[0]
+            print(f"paper doi: {paper_idx}")
             ci_fabs = {  # tech | CI_fab [g, CO2/mm2]
                 28: 8.709,
                 22: 9.446,
@@ -1155,7 +1157,8 @@ def scatter_performance(acc_types, sram_sizes, workload,
                     geo_cfft_em = 1
                     geo_cffw_op = 1
                     geo_cffw_em = 1
-                    for workload in ["ae", "ds_cnn", "resnet8", "mobilenet"]:
+                    # for workload in ["ae", "ds_cnn", "resnet8", "mobilenet"]:
+                    for workload in ["deeplabv3", "mobilebert", "mobilenet_edgetpu", "mobilenet_v2"]:
                         tmp_wk = tmp[(tmp.workload == workload)]
                         tmp_wk = tmp_wk[(tmp_wk.acc_type == a) & (tmp_wk.sram_size == sram_size) & (tmp_wk.dim == dim)]
                         cfft_op = np.array([x["opcf"] for x in tmp_wk.cf_ft])
@@ -1175,7 +1178,7 @@ def scatter_performance(acc_types, sram_sizes, workload,
                     # topsw_scatter.scatter(topsw, cfft,
                     # topsw_scatter.scatter(topsw, geo_cffw_op,
                     #                       color="white", marker=markers[ii_a], edgecolors=colors[ii_b], s=marker_size)
-                    topsw_scatter.scatter(topsw, cfft,
+                    topsw_scatter.scatter(cfft, cffw,
                                           color=colors[ii_b], marker=markers[ii_a], edgecolors="black", s=marker_size)
         # configuration
         for i in range(0, fig_rows_nbs):
@@ -1185,8 +1188,9 @@ def scatter_performance(acc_types, sram_sizes, workload,
             axs.set_axisbelow(True)
         # axs.set_xlabel(f"Area (mm$^2$)")
         # axs.set_ylabel(f"TOP/s/W")
-        axs.set_xlabel(f"TOP/s/W")
-        axs.set_ylabel(f"g, CO2/inf (CA scenario)")
+        # axs.set_xlabel(f"TOP/s/W")
+        axs.set_xlabel(f"g, CO2/inf (CA scenario)")
+        axs.set_ylabel(f"g, CO2/inf (PA scenario)")
         # axs[1][0].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-time)", fontsize=font_size * 1.2)
         # axs[1][1].set_ylabel(f"\t\t\t\t\t\t\tg, CO$_2$/Inference (fixed-work)", fontsize=font_size * 1.2)
         # axs[0][0].set_title(f"Simple task [{workload}]")

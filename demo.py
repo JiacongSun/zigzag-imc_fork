@@ -12,7 +12,8 @@ from PIL import ImageTk, Image
 class demo:
     def __init__(self):
         # Read in parameters
-        df = read_pickle("no_cme_expr_res_tiny.pkl")
+        # df = read_pickle("no_cme_expr_res_tiny.pkl")
+        df = read_pickle("no_cme_expr_res_mobile.pkl")
         workloads = ["ae", "ds_cnn", "mobilenet", "resnet8"]  # legal workload keywords
         periods = {"peak": 1, "ae": 1e+9 / 1, "ds_cnn": 1e+9 / 10, "mobilenet": 1e+9 / 0.75, "resnet8": 1e+9 / 25,
                    "geo": 1e+9 / ((1 * 10 * 0.75 * 25) ** 0.25),
@@ -53,18 +54,25 @@ class demo:
         self.acc_entry.pack()
 
         # Create an entry widget for user input (y axis): carbon or topsw
-        entry_label_y = ttk.Label(self.root, text="Enter y axis (area, carbon, topsw, carbon_bd):")
+        entry_label_y = ttk.Label(self.root, text="Enter y axis (area, carbon_ft, carbon_fw, topsw, carbon_bd):")
         entry_label_y.pack()
         self.y_entry = ttk.Entry(self.root)
         self.y_entry.insert(0, "topsw")
         self.y_entry.pack()
 
         # Create an entry widget for user input (x axis): carbon or topsw
-        entry_label_x = ttk.Label(self.root, text="Enter x axis (area, carbon, topsw):")
+        entry_label_x = ttk.Label(self.root, text="Enter x axis (area, carbon_fw, carbon_ft, topsw):")
         entry_label_x.pack()
         self.x_entry = ttk.Entry(self.root)
         self.x_entry.insert(0, "area")
         self.x_entry.pack()
+
+        # Create an entry widget for user input (x axis): carbon or topsw
+        # entry_label_df = ttk.Label(self.root, text="Enter workload: (tiny, mobile)")
+        # entry_label_df.pack()
+        # self.df_entry = ttk.Entry(self.root)
+        # self.df_entry.insert(0, "tiny")
+        # self.df_entry.pack()
 
         # Create a button to update the plot
         update_button = ttk.Button(self.root, text="Update Plot", command=self.update_plot)
@@ -88,12 +96,12 @@ class demo:
                 return -1
         self.acc_types = acc_input
 
-        if self.y_entry.get() not in ["carbon", "topsw", "carbon_bd", "area"]:
+        if self.y_entry.get() not in ["carbon_ft", "carbon_fw", "topsw", "carbon_bd", "area"]:
             return -1
         else:
             y_input = self.y_entry.get()
 
-        if self.x_entry.get() not in ["carbon", "topsw", "area"]:
+        if self.x_entry.get() not in ["carbon_ft", "carbon_fw", "topsw", "area"]:
             return -1
         else:
             x_input = self.x_entry.get()
@@ -155,8 +163,10 @@ class demo:
                         else:
                             label = None
 
-                    if x_input == "carbon":
+                    if x_input == "carbon_ft":
                         x_bar = cfft
+                    elif x_input == "carbon_fw":
+                        x_bar = cffw
                     elif x_input == "area":
                         x_bar = area
                     elif x_input == "topsw":
@@ -164,8 +174,11 @@ class demo:
                     else:
                         pass
 
-                    if y_input == "carbon":
+                    if y_input == "carbon_ft":
                         self.ax.scatter(x_bar, cfft, label=label,
+                                        color=colors[ii_b], marker=markers[ii_a], edgecolors="black", s=marker_size)
+                    elif y_input == "carbon_fw":
+                        self.ax.scatter(x_bar, cffw, label=label,
                                         color=colors[ii_b], marker=markers[ii_a], edgecolors="black", s=marker_size)
                     elif y_input == "topsw":
                         self.ax.scatter(x_bar, topsw, label=label,
