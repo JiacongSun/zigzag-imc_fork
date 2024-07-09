@@ -305,8 +305,8 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
             axs[j].grid("both")
             axs[j].set_axisbelow(True)
             # axs[i][j].legend(loc="upper left")
-        axs[0].set_ylabel(f"g, CO$_2$/inference (CA)", fontsize=font_size+5)
-        axs[1].set_ylabel(f"g, CO$_2$/inference (PA)", fontsize=font_size + 5)
+        axs[0].set_ylabel(f"g, CO$_2$$_e$$_q$/inference (CA)", fontsize=font_size+5)
+        axs[1].set_ylabel(f"g, CO$_2$$_e$$_q$/inference", fontsize=font_size + 5)
 
     # legend description
     # green: operational carbon footprint
@@ -2689,13 +2689,13 @@ def experiment_1_literature_trend():
     #                                                  period=10**9/3.7,  # unit: ns
     #                                                  op_per_task=10535996 * 2)  # unit: ops/inference
     plot_carbon_footprint_in_literature(data=data,
-                          period=10 ** 9 / 3.7,  # unit: ns
-                          op_per_task=10535996 * 2)  # unit: ops/inference (mlperf-tiny)
+                                        period=10 ** 9 / 3.7,  # unit: ns
+                                        op_per_task=10535996 * 2)  # unit: ops/inference (mlperf-tiny)
 
     # plot_carbon_footprint_in_literature(data=data,
     #                                     period=10 ** 9 / 25,  # unit: ns
     #                                     op_per_task=6101039461)  # unit: ops/inference (mlperf-mobile)
-    plot_area_trend_in_literature(data=data)
+    # plot_area_trend_in_literature(data=data)  # fig 1 in the paper
     breakpoint()
 
 def simulation_for_localmemoryloop_feature(acc_types, periods, dram_ac_cost_per_bit,
