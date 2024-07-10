@@ -300,13 +300,13 @@ def plot_carbon_footprint_in_literature(data, period=4e+3, op_per_task=1):
         for j in range(0, fig_cols_nbs):
             # axs[j].set_xlabel(f"g, CO$_2$/inference (fixed-work)", fontsize=font_size+5)
             axs[j].set_xlabel(f"TOP/s/W", fontsize=font_size + 5)
-            # axs[j].set_ylim([10**-11, 10**-9])
+            axs[j].set_ylim([10**-10, 10**-6])
             # axs[j].set_xlim([10 ** -6, 2*10 ** -3])
             axs[j].grid("both")
             axs[j].set_axisbelow(True)
             # axs[i][j].legend(loc="upper left")
         axs[0].set_ylabel(f"g, CO$_2$$_e$$_q$/inference (CA)", fontsize=font_size+5)
-        axs[1].set_ylabel(f"g, CO$_2$$_e$$_q$/inference", fontsize=font_size + 5)
+        axs[1].set_ylabel(f"g, CO$_2$$_e$$_q$", fontsize=font_size + 5)
 
     # legend description
     # green: operational carbon footprint
@@ -2689,7 +2689,7 @@ def experiment_1_literature_trend():
     #                                                  period=10**9/3.7,  # unit: ns
     #                                                  op_per_task=10535996 * 2)  # unit: ops/inference
     plot_carbon_footprint_in_literature(data=data,
-                                        period=10 ** 9 / 25,  # unit: ns
+                                        period=10 ** 9 / 3.7,  # unit: ns
                                         op_per_task=10535996 * 2)  # unit: ops/inference (mlperf-tiny)
 
     plot_carbon_footprint_in_literature(data=data,
