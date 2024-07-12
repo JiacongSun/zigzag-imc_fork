@@ -7,6 +7,7 @@
     <list default="true" id="1b4fd860-b9e8-491d-8907-63be57d4edbf" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/expr.py" beforeDir="false" afterPath="$PROJECT_DIR$/expr.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/no_cme_expr_res_tiny.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/no_cme_expr_res_tiny.pkl" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -187,6 +188,16 @@
           <url>file://$PROJECT_DIR$/zigzag/classes/stages/SpatialMappingConversionStage.py</url>
           <line>236</line>
           <option name="timeStamp" value="51" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/expr.py</url>
+          <line>1151</line>
+          <option name="timeStamp" value="56" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/expr.py</url>
+          <line>2952</line>
+          <option name="timeStamp" value="57" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
