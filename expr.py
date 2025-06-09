@@ -2823,8 +2823,8 @@ if __name__ == "__main__":
     # If simulation is required, set pickle_exist = False.
     #########################################
     ## Experiment 1: carbon for papers in literature
-    experiment_1_literature_trend()
-    breakpoint()
+    # experiment_1_literature_trend()
+    # breakpoint()
     #########################################
     ## Experiment 2: Carbon for different area, for AIMC, DIMC, pure digital PEs
     ## Step 0: simulation parameter setting
@@ -2909,7 +2909,7 @@ if __name__ == "__main__":
                                                  d1_equal_d2=d1_equal_d2, workload_suit=workload_suit)
     else:
         ## Step 1: load df from pickle
-        workload_suit = "mobile"
+        workload_suit = "tiny"
 
         if workload_suit == "tiny":
             df = read_pickle("no_cme_expr_res_tiny.pkl")
@@ -2935,15 +2935,15 @@ if __name__ == "__main__":
         #       for fixed-time scenarios.
         # @para d1_equal_d2: True [D1=D2=dim], False [D1=dim//8, D2=dim]
         workload = "geo"
-        # sram_size = 512*1024
-        # i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
-        # assert workload in workloads, f"Legal workload: {workloads}"
-        # assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
-        # assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
-        #                            "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
-        #                            "different to each other."
+        sram_size = 512*1024
+        i_df = df[(df.workload == workload) & (df.sram_size == sram_size)]
+        assert workload in workloads, f"Legal workload: {workloads}"
+        assert sram_size in sram_sizes, f"Legal sram size: {sram_sizes}"
+        assert workload != "peak", "The color of the plot has not been fixed when workload == peak. Now the color " \
+                                   "display is in a mess order. The cause is the elements in AIMC and DIMC are " \
+                                   "different to each other."
         ## (1) [check] if performance value makes sense (x axis: dimension size) (note: workload != geo)
-        # plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
+        plot_performance_bar(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True, breakdown=False)
         ## (2) [check] performance together with carbon (x axis: dimension size)
         ## plot_curve below is for plotting TOPsw, TOPs, TOPsmm2, carbon curve for a fixed workload and sram size
         # plot_curve(i_df=i_df, acc_types=acc_types, workload=workload, sram_size=sram_size, d1_equal_d2=True)
